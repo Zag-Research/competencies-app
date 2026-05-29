@@ -1,0 +1,24 @@
+CREATE TABLE students (
+    first_name TEXT,
+    last_name TEXT,
+    student_number TEXT PRIMARY KEY
+);
+
+CREATE TABLE competencies (
+    name TEXT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    description TEXT
+);
+
+CREATE TABLE achievements (
+    student_number TEXT,
+    competency_id INTEGER,
+    date_achieved TEXT,
+    PRIMARY KEY (student_number, competency_id),
+    FOREIGN KEY (student_number) REFERENCES students(student_number),
+    FOREIGN KEY (competency_id) REFERENCES competencies(id)
+);
+
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+INSERT INTO settings VALUES('admins','dmason lfortune');
+INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
