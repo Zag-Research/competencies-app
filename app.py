@@ -6,6 +6,11 @@ from datetime import date
 
 app = Flask(__name__)
 app.config['ENV'] = 'development'
+STATE_LABELS = {
+    'achieved': 'Achieved',
+    'not_yet': 'Not yet',
+    'cooling_off': 'Cooling off',
+}
 
 # Dev mode hardcodes the user to dmason so no CAS/Apache is needed locally.
 # In production, Apache mod_auth_cas sets the Cas-User header.
@@ -17,6 +22,12 @@ def userCas(user=None):
     if not user:
         user = casUser
     return user, casUser
+
+def achievement_state(competency_id, achieved):
+    if competency_id in achieved:
+        return 'achieved'
+    else:
+        return 'not_yet'
 
 
 @app.route('/mark')
@@ -88,3 +99,23 @@ def save_marks(student_number):
             connection.commit()
             
     return redirect(url_for('mark_student', student_number=student_number))
+
+@app.route('/view/<student_number>')
+def view_student(student_number=None):
+    user, casUser = userCas()
+    p = page()
+    with closing(sqlite3.connect("course-data.db")) as connection:
+        with closing(connection.cursor()) as sql:
+            achieved = {
+                row[0]
+                for row in sql.execute(
+                    "select competency_id from achievements where student_number = ?",
+                    (student_number,)
+                ).fetchall()
+            }
+            for (cid, name) in sql.execute(
+                "select id, name from competencies order by id"
+            ).fetchall():
+                state = achievement_state(cid, achieved)
+                p += div(name + " " + STATE_LABELS[state])
+    return str(p)
