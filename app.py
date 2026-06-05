@@ -67,7 +67,7 @@ def mark_student(student_number=None):
             f += input(type='submit', value='Save')
             p += f
     return str(p)
-
+'''
 @app.route('/mark/<student_number>', methods=['POST'])
 def save_marks(student_number):
     submitted = { int(k) for k in request.form }
@@ -99,7 +99,29 @@ def save_marks(student_number):
             connection.commit()
             
     return redirect(url_for('mark_student', student_number=student_number))
-
+'''
+@app.route('/save/<student_number>/<competency_id>/<new_state>', methods=['POST'])
+def save_mark(student_number, competency_id, new_state):
+    # Runs on every tap of a competency. Makes the database match the tap:
+    #   tapped to blank        -> remove the record (undo it, like it never happened)
+    #   tapped to achieved     -> save it as achieved
+    #   tapped to cooling_off  -> save it as cooling off
+    # Each tap saves on its own, no Save button.
+    with closing(sqlite3.connect("course-data.db")) as connection:
+        with closing(connection.cursor()) as sql:
+            if new_state == 'blank':
+                sql.execute(
+                    "delete from achievements where student_number = ? and competency_id = ?",
+                    (student_number, competency_id)
+                )
+            else:
+                sql.execute(
+                    "insert or replace into achievements (student_number, competency_id, status, date_recorded) values (?, ?, ?, CURRENT_TIMESTAMP)",
+                    (student_number, competency_id, new_state)
+                )
+            connection.commit()
+    return ''
+    
 @app.route('/view/<student_number>')
 def view_student(student_number=None):
     user, casUser = userCas()

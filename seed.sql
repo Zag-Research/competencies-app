@@ -7,6 +7,6 @@ INSERT INTO competencies (name, description) VALUES ('Nested loops', 'a programm
 INSERT INTO competencies (name, description) VALUES ('Recursion', 'occurs when a function or process calls itself to solve a smaller, self-similar piece of a larger problem');
 INSERT INTO competencies (name, description) VALUES ('Pointers', 'a special programming variable that stores the memory address of another piece of data');
 
--- achievements (student_number, competency_id, date_achieved)
-INSERT INTO achievements VALUES('600990517', 1, '2026-05-20');
-INSERT INTO achievements VALUES('500880917', 2, '2026-05-22');
+-- achievements (student_number, competency_id, status, date_recorded)
+INSERT INTO achievements VALUES('600990517', 1, 'achieved', '2026-06-05 15:13');
+INSERT INTO achievements VALUES('500880917', 2,'achieved', '2026-06-05 15:13');

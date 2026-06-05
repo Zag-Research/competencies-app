@@ -1,3 +1,8 @@
+DROP TABLE IF EXISTS achievements;
+DROP TABLE IF EXISTS students;
+DROP TABLE IF EXISTS competencies;
+DROP TABLE IF EXISTS settings;
+
 CREATE TABLE students (
     first_name TEXT,
     last_name TEXT,
@@ -13,7 +18,8 @@ CREATE TABLE competencies (
 CREATE TABLE achievements (
     student_number TEXT,
     competency_id INTEGER,
-    date_achieved TEXT,
+    status TEXT,
+    date_recorded TEXT,
     PRIMARY KEY (student_number, competency_id),
     FOREIGN KEY (student_number) REFERENCES students(student_number),
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
