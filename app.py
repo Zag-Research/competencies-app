@@ -14,7 +14,7 @@ STATE_LABELS = {
 # Buttons shown per competency on the marking page, in display order.
 # The value is what gets POSTed to /save; 'blank' deletes the row.
 MARK_BUTTONS = [
-    ('blank', 'Not yet'),
+    ('blank', 'Not assessed'),
     ('achieved', 'Achieved'),
     ('cooling_off', 'Not passed'),
 ]
