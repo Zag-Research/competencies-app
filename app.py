@@ -191,5 +191,9 @@ def view_student(student_number=None):
                     label = cooling_off_label(recorded_at.get(cid))
                 else:
                     label = STATE_LABELS[state]
-                p += div(name + " " + label)
+                # competency name on the left, a colored status pill on the right
+                p += div(
+                    span(name).classes('progress-name'),
+                    span(label).classes('progress-badge').addClasses('state-' + state),
+                ).classes('progress-row')
     return str(p)

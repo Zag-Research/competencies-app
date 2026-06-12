@@ -56,6 +56,37 @@ h1 {
     border-radius: 8px;
 }
 
+/* Student progress view: competency name + a colored status pill. */
+.progress-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid #ececec;
+}
+.progress-name {
+    font-weight: 500;
+}
+.progress-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+.state-achieved {
+    background: #e6f4ea;
+    color: #1e6b30;
+}
+.state-cooling_off {
+    background: #fdf0d5;
+    color: #8a5a00;
+}
+.state-not_yet {
+    background: #eceef1;
+    color: #5f6571;
+}
+
 /* One competency: label on top, segmented buttons full-width below. */
 .mark-row {
     margin: 0 0 1.1rem;
