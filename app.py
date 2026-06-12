@@ -12,6 +12,15 @@ STATE_LABELS = {
     'cooling_off': 'Cooling off',
 }
 
+# Emoji shown on the tappable mark cell for each state.
+# 'blank' means there is no row in the database yet (nothing recorded).
+# Keep this in sync with STATE_EMOJI in static/js/mark.js.
+STATE_EMOJI = {
+    'blank': '🔲',
+    'achieved': '✅',
+    'cooling_off': '⚠️',
+}
+
 # Dev mode hardcodes the user to dmason so no CAS/Apache is needed locally.
 # In production, Apache mod_auth_cas sets the Cas-User header.
 def userCas(user=None):
@@ -46,26 +55,29 @@ def mark():
 def mark_student(student_number=None):
     user, casUser = userCas()
     p = page()
+    p.setJs('/static/js/mark.js')
     with closing(sqlite3.connect("course-data.db")) as connection:
         with closing(connection.cursor()) as sql:
-            # which competencies this student has already achieved
-            achieved = {
-                row[0]
+            # current recorded state per competency: competency_id -> status
+            states = {
+                row[0]: row[1]
                 for row in sql.execute(
-                    "select competency_id from achievements where student_number = ?",
+                    "select competency_id, status from achievements where student_number = ?",
                     (student_number,)
                 ).fetchall()
             }
-            # build a form with one checkbox per competency
-            f = form(method='post')
+            # one tappable cell per competency. Tapping cycles the state and
+            # saves it on each tap (see static/js/mark.js). No Save button.
             for (cid, name) in sql.execute(
                     "select id, name from competencies order by id").fetchall():
-                box = input(type='checkbox', name=str(cid))
-                if cid in achieved:
-                    box.addAttributes(checked='checked')
-                f += div(box, name)
-            f += input(type='submit', value='Save')
-            p += f
+                state = states.get(cid, 'blank')
+                # str(cid): myhtml treats v==True as a valueless attribute, and
+                # in Python the int 1 == True, so id 1 would lose its value.
+                cell = div(STATE_EMOJI[state],
+                           data_student=student_number,
+                           data_competency=str(cid),
+                           data_state=state).classes('mark-cell')
+                p += div(cell, name)
     return str(p)
 '''
 @app.route('/mark/<student_number>', methods=['POST'])
