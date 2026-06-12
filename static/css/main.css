@@ -12,6 +12,50 @@ a {
     color: #1a5fb4;
 }
 
+/* Persistent header: app title links home from every page. */
+.site-header {
+    border-bottom: 1px solid #d6d9df;
+    padding-bottom: 0.6rem;
+    margin-bottom: 1.2rem;
+}
+.site-header a {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+h1 {
+    font-size: 1.4rem;
+    margin: 0 0 0.8rem;
+}
+
+/* Back / cross links under a page heading. */
+.subnav {
+    display: flex;
+    gap: 1.2rem;
+    margin-bottom: 1.2rem;
+    font-size: 0.95rem;
+}
+
+/* Home roster: one student per row, name plus Mark/View links. */
+.roster-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #ececec;
+}
+.roster-name {
+    flex: 1;
+}
+.roster-link {
+    min-width: 60px;
+    text-align: center;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid #c0c4cc;
+    border-radius: 8px;
+}
+
 /* One competency: label on top, segmented buttons full-width below. */
 .mark-row {
     margin: 0 0 1.1rem;
