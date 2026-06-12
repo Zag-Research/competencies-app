@@ -1,35 +1,28 @@
-// Tap-to-save for the marking page. Each .mark-cell shows one
-// competency's state. Tapping cycles it and saves the new state.
-
-const NEXT_STATE = {
-    blank: 'achieved',
-    achieved: 'cooling_off',
-    cooling_off: 'blank',
-};
-
-const STATE_EMOJI = {
-    blank: '🔲',
-    achieved: '✅',
-    cooling_off: '⚠️',
-};
+// Tap-to-save for the marking page. Each competency has a group of
+// state buttons (.mark-btn). Tapping one sets that state and saves it.
 
 document.addEventListener('click', async function (event) {
-    // Find the cell that was tapped (or bail if the tap missed one).
-    const cell = event.target.closest('.mark-cell');
-    if (!cell) return;
+    // Find the state button that was tapped (or bail if the tap missed one).
+    const btn = event.target.closest('.mark-btn');
+    if (!btn) return;
 
-    // Work out the next state and where to save it.
-    const next = NEXT_STATE[cell.dataset.state];
-    const url = `/save/${cell.dataset.student}/${cell.dataset.competency}/${next}`;
+    // Already the active state? Nothing to save.
+    if (btn.classList.contains('is-active')) return;
+
+    const url = `/save/${btn.dataset.student}/${btn.dataset.competency}/${btn.dataset.state}`;
 
     try {
         const response = await fetch(url, { method: 'POST' });
         if (!response.ok) {
             throw new Error('Save failed: ' + response.status);
         }
-        // Only update the display once the server confirmed the save.
-        cell.dataset.state = next;
-        cell.textContent = STATE_EMOJI[next];
+        // Move the active highlight to the clicked button, within its group.
+        const group = btn.closest('.mark-group');
+        group.querySelectorAll('.mark-btn').forEach(function (other) {
+            const active = (other === btn);
+            other.classList.toggle('is-active', active);
+            other.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     } catch (error) {
         console.error(error);
         alert('Could not save that change. Check the server and try again.');

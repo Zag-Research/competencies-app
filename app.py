@@ -11,14 +11,13 @@ STATE_LABELS = {
     'cooling_off': 'Cooling off',
 }
 
-# Emoji shown on the tappable mark cell for each state.
-# 'blank' means there is no row in the database yet (nothing recorded).
-# Keep this in sync with STATE_EMOJI in static/js/mark.js.
-STATE_EMOJI = {
-    'blank': '🔲',
-    'achieved': '✅',
-    'cooling_off': '⚠️',
-}
+# Buttons shown per competency on the marking page, in display order.
+# The value is what gets POSTed to /save; 'blank' deletes the row.
+MARK_BUTTONS = [
+    ('blank', 'Not yet'),
+    ('achieved', 'Achieved'),
+    ('cooling_off', 'Cooling off'),
+]
 
 # Dev mode hardcodes the user to dmason so no CAS/Apache is needed locally.
 # In production, Apache mod_auth_cas sets the Cas-User header.
@@ -63,18 +62,25 @@ def mark_student(student_number=None):
                     (student_number,)
                 ).fetchall()
             }
-            # one tappable cell per competency. Tapping cycles the state and
-            # saves it on each tap (see static/js/mark.js). No Save button.
+            # one segmented button group per competency. Tapping a button sets
+            # that state and saves it (see static/js/mark.js). No Save button.
             for (cid, name) in sql.execute(
                     "select id, name from competencies order by id").fetchall():
-                state = states.get(cid, 'blank')
-                # str(cid): myhtml treats v==True as a valueless attribute, and
-                # in Python the int 1 == True, so id 1 would lose its value.
-                cell = div(STATE_EMOJI[state],
-                           data_student=student_number,
-                           data_competency=str(cid),
-                           data_state=state).classes('mark-cell')
-                p += div(cell, name)
+                current = states.get(cid, 'blank')
+                group = div().classes('mark-group')
+                for (value, label) in MARK_BUTTONS:
+                    # str(cid): myhtml renders v==True as a valueless attribute,
+                    # and in Python the int 1 == True, so id 1 would lose its value.
+                    b = button(label, type='button',
+                               data_student=student_number,
+                               data_competency=str(cid),
+                               data_state=value).classes('mark-btn')
+                    active = (value == current)
+                    if active:
+                        b.addClasses('is-active')
+                    b.addAttributes(aria_pressed='true' if active else 'false')
+                    group += b
+                p += div(div(name).classes('mark-label'), group).classes('mark-row')
     return str(p)
 
 @app.route('/save/<student_number>/<competency_id>/<new_state>', methods=['POST'])

@@ -78,6 +78,8 @@ class form(element):
 	pass
 class input(element):
 	pass
+class button(element):
+	pass
 class pre(element):
 	pass
 class table(element):
