@@ -32,11 +32,9 @@ def userCas(user=None):
         user = casUser
     return user, casUser
 
-def achievement_state(competency_id, achieved):
-    if competency_id in achieved:
-        return 'achieved'
-    else:
-        return 'not_yet'
+def achievement_state(competency_id, states):
+    # states maps competency_id -> recorded status. No row means 'not_yet'.
+    return states.get(competency_id, 'not_yet')
 
 
 @app.route('/mark')
@@ -133,23 +131,23 @@ def save_mark(student_number, competency_id, new_state):
                 )
             connection.commit()
     return ''
-    
+
 @app.route('/view/<student_number>')
 def view_student(student_number=None):
     user, casUser = userCas()
     p = page()
     with closing(sqlite3.connect("course-data.db")) as connection:
         with closing(connection.cursor()) as sql:
-            achieved = {
-                row[0]
+            states = {
+                row[0]: row[1]
                 for row in sql.execute(
-                    "select competency_id from achievements where student_number = ?",
+                    "select competency_id, status from achievements where student_number = ?",
                     (student_number,)
                 ).fetchall()
             }
             for (cid, name) in sql.execute(
                 "select id, name from competencies order by id"
             ).fetchall():
-                state = achievement_state(cid, achieved)
+                state = achievement_state(cid, states)
                 p += div(name + " " + STATE_LABELS[state])
     return str(p)
