@@ -16,7 +16,7 @@ STATE_LABELS = {
 MARK_BUTTONS = [
     ('blank', 'Not yet'),
     ('achieved', 'Achieved'),
-    ('cooling_off', 'Cooling off'),
+    ('cooling_off', 'Not passed'),
 ]
 
 # Dev mode hardcodes the user to dmason so no CAS/Apache is needed locally.
