@@ -1,5 +1,6 @@
 from contextlib import closing
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from flask import Flask, request, url_for
 from myhtml import *
 
@@ -33,6 +34,32 @@ def userCas(user=None):
 def achievement_state(competency_id, states):
     # states maps competency_id -> recorded status. No row means 'not_yet'.
     return states.get(competency_id, 'not_yet')
+
+
+# How long a "Not passed" attempt keeps a competency in cooling off.
+# Display only for now: nothing enforces a retry block yet.
+COOLDOWN = timedelta(hours=48)
+
+def parse_timestamp(value):
+    # date_recorded is stored as UTC text by SQLite CURRENT_TIMESTAMP, and the
+    # seed rows omit seconds, so try both formats and tag the result as UTC.
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+def cooling_off_label(date_recorded):
+    # "Cooling off (Nh left)", counting 48h down from when it was recorded.
+    recorded = parse_timestamp(date_recorded)
+    if recorded is None:
+        return STATE_LABELS['cooling_off']
+    remaining = COOLDOWN - (datetime.now(timezone.utc) - recorded)
+    if remaining <= timedelta(0):
+        return STATE_LABELS['cooling_off'] + ' (ready to retry)'
+    hours_left = int(remaining.total_seconds() // 3600)
+    return STATE_LABELS['cooling_off'] + ' (' + str(hours_left) + 'h left)'
 
 
 def page_header():
@@ -148,16 +175,21 @@ def view_student(student_number=None):
             first, last = student
             p += h1('Progress: ' + first + ' ' + last)
             p += div(a('← Back to students', href=url_for('index')).classes('back-link')).classes('subnav')
-            states = {
-                row[0]: row[1]
-                for row in sql.execute(
-                    "select competency_id, status from achievements where student_number = ?",
-                    (student_number,)
-                ).fetchall()
-            }
+            states = {}
+            recorded_at = {}
+            for (cid, status, recorded) in sql.execute(
+                "select competency_id, status, date_recorded from achievements where student_number = ?",
+                (student_number,)
+            ).fetchall():
+                states[cid] = status
+                recorded_at[cid] = recorded
             for (cid, name) in sql.execute(
                 "select id, name from competencies order by id"
             ).fetchall():
                 state = achievement_state(cid, states)
-                p += div(name + " " + STATE_LABELS[state])
+                if state == 'cooling_off':
+                    label = cooling_off_label(recorded_at.get(cid))
+                else:
+                    label = STATE_LABELS[state]
+                p += div(name + " " + label)
     return str(p)
