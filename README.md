@@ -8,15 +8,17 @@ competencies in lab, and instructors or TAs record them in real time.
 
 The course defines a set of competencies (roughly 40). Each student works
 toward demonstrating them, and staff record progress as it happens. The app has
-two views:
+a home page and two per-student views:
 
+- **Home** (`/`): a roster of students, each with a link to mark them or to view
+  their progress. Every page has a header that links back home.
 - **Student view** (`/view/<student_number>`): a read-only progress dashboard.
-  Shows every competency and its current state, not just the ones achieved, so a
-  student can see exactly where they stand at any point.
-- **Staff view** (`/mark/<student_number>`): a student selector plus a control
-  for recording each competency's state. Marking is a tap-to-cycle toggle (see
-  below). Any TA or instructor can evaluate any student; there is no
-  per-section ownership.
+  Shows every competency and its current state as a colored status pill, not just
+  the ones achieved, so a student can see exactly where they stand at any point.
+- **Staff view** (`/mark/<student_number>`): for each competency, a row of three
+  buttons (Not assessed / Achieved / Not passed). Tapping a button sets that
+  state and saves immediately (no save button). Any TA or instructor can evaluate
+  any student; there is no per-section ownership.
 
 ## Competency states
 
@@ -27,15 +29,19 @@ Each competency is in one of three states for a given student:
 - **Cooling off** — the student attempted it and did not pass; a cooldown period
   applies before they can re-attempt.
 
-Staff cycle through these by tapping a competency: not attempted -> achieved ->
-cooling off -> not attempted. Each tap saves on its own (no save button). The
-cooling-off state exists to space out re-attempts and manage TA workload.
+Staff set the state by tapping one of three buttons per competency (Not assessed
+/ Achieved / Not passed); each tap saves on its own (no save button). The student
+view shows the same three states with friendlier wording (Not yet / Achieved /
+Cooling off). The cooling-off state exists to space out re-attempts and manage TA
+workload.
 
-The cooldown is time-based (roughly two days). When a competency enters cooling
-off, the time is recorded; eligibility to re-attempt is determined by how much
-time has elapsed since then. (Open attendance across lab sections means there is
-no fixed sequence of sessions to count against, so the rule is by elapsed time,
-not by number of sessions.)
+The cooldown is time-based (48 hours from the recorded time). The student view
+**displays** the remaining time ("Cooling off (Nh left)"), computed live from
+`date_recorded`. This is display only: enforcement (actually blocking a
+re-attempt during the window) is not yet implemented, pending confirmation of the
+exact rule. (Open attendance across lab sections means there is no fixed sequence
+of sessions to count against, so the rule is by elapsed time, not by number of
+sessions.)
 
 ## Architecture
 
@@ -83,17 +89,17 @@ From the project folder:
 
 ```
 source venv/bin/activate     # activate the virtualenv
-export FLASK_APP=app.py
-flask run --debug
+flask --app app run --debug --port 5001
 ```
 
-Then open `http://127.0.0.1:5000/<route>` in a browser (for example, `/mark` for
-the staff selector).
+Then open `http://127.0.0.1:5001/` in a browser (the home page lists the
+students).
 
 Notes:
 - Flask is installed inside the virtualenv, not globally, so the activate step is
   required.
 - `--debug` enables auto-reload on save and full error pages in the browser.
+- Port 5001 avoids macOS AirPlay Receiver, which can silently claim port 5000.
 - Use `python3` (not `python`) for running scratch files directly. The server
   itself is started via `flask run`.
 
