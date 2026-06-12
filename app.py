@@ -35,15 +35,27 @@ def achievement_state(competency_id, states):
     return states.get(competency_id, 'not_yet')
 
 
-@app.route('/mark')
-def mark():
+def page_header():
+    # Banner shown on every page; the title always links back home.
+    return div(a('Competency Tracker', href=url_for('index'))).classes('site-header')
+
+
+@app.route('/')
+def index():
     user, casUser = userCas()
     p = page()
+    p += page_header()
+    p += h1('Students')
     with closing(sqlite3.connect("course-data.db")) as connection:
         with closing(connection.cursor()) as sql:
             for (number, first, last) in sql.execute(
                     "select student_number, first_name, last_name from students order by last_name").fetchall():
-                p += div(a(last + ", " + first, href=url_for('mark_student', student_number=number)))
+                # one roster row per student: name plus a Mark and a View link
+                p += div(
+                    span(last + ", " + first).classes('roster-name'),
+                    a('Mark', href=url_for('mark_student', student_number=number)).classes('roster-link'),
+                    a('View', href=url_for('view_student', student_number=number)).classes('roster-link'),
+                ).classes('roster-row')
     return str(p)
 
 
@@ -52,8 +64,22 @@ def mark_student(student_number=None):
     user, casUser = userCas()
     p = page()
     p.setJs('/static/js/mark.js')
+    p += page_header()
     with closing(sqlite3.connect("course-data.db")) as connection:
         with closing(connection.cursor()) as sql:
+            student = sql.execute(
+                "select first_name, last_name from students where student_number = ?",
+                (student_number,)
+            ).fetchone()
+            if student is None:
+                p += h1('Student not found')
+                return str(p)
+            first, last = student
+            p += h1('Marking: ' + first + ' ' + last)
+            p += div(
+                a('← Back to students', href=url_for('index')).classes('back-link'),
+                a('View as student', href=url_for('view_student', student_number=student_number)).classes('back-link'),
+            ).classes('subnav')
             # current recorded state per competency: competency_id -> status
             states = {
                 row[0]: row[1]
@@ -109,8 +135,19 @@ def save_mark(student_number, competency_id, new_state):
 def view_student(student_number=None):
     user, casUser = userCas()
     p = page()
+    p += page_header()
     with closing(sqlite3.connect("course-data.db")) as connection:
         with closing(connection.cursor()) as sql:
+            student = sql.execute(
+                "select first_name, last_name from students where student_number = ?",
+                (student_number,)
+            ).fetchone()
+            if student is None:
+                p += h1('Student not found')
+                return str(p)
+            first, last = student
+            p += h1('Progress: ' + first + ' ' + last)
+            p += div(a('← Back to students', href=url_for('index')).classes('back-link')).classes('subnav')
             states = {
                 row[0]: row[1]
                 for row in sql.execute(

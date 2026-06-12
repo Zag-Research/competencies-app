@@ -56,6 +56,10 @@ class html(element):
 """+super.__str__()'''
 class p(element):
 	pass
+class h1(element):
+	pass
+class h2(element):
+	pass
 class div(element):
 	pass
 class head(element):
