@@ -1,8 +1,7 @@
 from contextlib import closing
 import sqlite3
-from flask import Flask, request, url_for, redirect
+from flask import Flask, request, url_for
 from myhtml import *
-from datetime import date
 
 app = Flask(__name__)
 app.config['ENV'] = 'development'
@@ -77,39 +76,7 @@ def mark_student(student_number=None):
                            data_state=state).classes('mark-cell')
                 p += div(cell, name)
     return str(p)
-'''
-@app.route('/mark/<student_number>', methods=['POST'])
-def save_marks(student_number):
-    submitted = { int(k) for k in request.form }
-    with closing(sqlite3.connect("course-data.db")) as connection:
-        with closing(connection.cursor()) as sql:
-            # which competencies this student has already achieved
-            stored = {
-                row[0]
-                for row in sql.execute(
-                    "select competency_id from achievements where student_number = ?",
-                    (student_number,)
-                ).fetchall()
-            }
 
-            to_insert = submitted - stored
-            to_delete = stored - submitted
-
-            for cid in to_insert:
-                sql.execute(
-                    "insert into achievements (student_number, competency_id, date_achieved) values (?, ?, ?)",
-                    (student_number, cid, date.today())
-                )
-                
-            for cid in to_delete:
-                sql.execute(
-                    "delete from achievements where student_number = ? and competency_id = ?",
-                    (student_number, cid)
-                    )
-            connection.commit()
-            
-    return redirect(url_for('mark_student', student_number=student_number))
-'''
 @app.route('/save/<student_number>/<competency_id>/<new_state>', methods=['POST'])
 def save_mark(student_number, competency_id, new_state):
     # Runs on every tap of a competency. Makes the database match the tap:
