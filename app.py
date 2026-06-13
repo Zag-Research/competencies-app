@@ -8,14 +8,14 @@ app = Flask(__name__)
 app.config['ENV'] = 'development'
 STATE_LABELS = {
     'achieved': 'Achieved',
-    'not_yet': 'Not yet',
+    'unassessed': 'Not yet',
     'cooling_off': 'Cooling off',
 }
 
 # Buttons shown per competency on the marking page, in display order.
-# The value is what gets POSTed to /save; 'blank' deletes the row.
+# The value is what gets POSTed to /save; 'unassessed' deletes the row.
 MARK_BUTTONS = [
-    ('blank', 'Not assessed'),
+    ('unassessed', 'Not assessed'),
     ('achieved', 'Achieved'),
     ('cooling_off', 'Not passed'),
 ]
@@ -32,8 +32,8 @@ def userCas(user=None):
     return user, casUser
 
 def achievement_state(competency_id, states):
-    # states maps competency_id -> recorded status. No row means 'not_yet'.
-    return states.get(competency_id, 'not_yet')
+    # states maps competency_id -> recorded status. No row means 'unassessed'.
+    return states.get(competency_id, 'unassessed')
 
 
 # How long a "Not passed" attempt keeps a competency in cooling off.
@@ -119,7 +119,7 @@ def mark_student(student_number=None):
             # that state and saves it (see static/js/mark.js). No Save button.
             for (cid, name) in sql.execute(
                     "select id, name from competencies order by id").fetchall():
-                current = states.get(cid, 'blank')
+                current = states.get(cid, 'unassessed')
                 group = div().classes('mark-group')
                 for (value, label) in MARK_BUTTONS:
                     # str(cid): myhtml renders v==True as a valueless attribute,
@@ -139,13 +139,13 @@ def mark_student(student_number=None):
 @app.route('/save/<student_number>/<competency_id>/<new_state>', methods=['POST'])
 def save_mark(student_number, competency_id, new_state):
     # Runs on every tap of a competency. Makes the database match the tap:
-    #   tapped to blank        -> remove the record (undo it, like it never happened)
+    #   tapped to unassessed   -> remove the record (undo it, like it never happened)
     #   tapped to achieved     -> save it as achieved
     #   tapped to cooling_off  -> save it as cooling off
     # Each tap saves on its own, no Save button.
     with closing(sqlite3.connect("course-data.db")) as connection:
         with closing(connection.cursor()) as sql:
-            if new_state == 'blank':
+            if new_state == 'unassessed':
                 sql.execute(
                     "delete from achievements where student_number = ? and competency_id = ?",
                     (student_number, competency_id)
