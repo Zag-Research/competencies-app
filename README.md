@@ -37,8 +37,9 @@ Three pages:
 ## Competency states
 
 Each competency is in one of three states per student: **Not assessed** (no record
-yet), **Achieved**, or **Cooling off** (attempted, did not pass). The student view
-uses friendlier wording (Not yet / Achieved / Cooling off).
+yet), **Achieved**, or **Cooling off** (attempted, did not pass). The staff button
+for the last one reads "Not passed" (the action being recorded); the student view
+shows it as "Cooling off" (the resulting state).
 
 ```mermaid
 stateDiagram-v2

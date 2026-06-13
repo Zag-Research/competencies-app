@@ -8,7 +8,7 @@ app = Flask(__name__)
 app.config['ENV'] = 'development'
 STATE_LABELS = {
     'achieved': 'Achieved',
-    'unassessed': 'Not yet',
+    'unassessed': 'Not assessed',
     'cooling_off': 'Cooling off',
 }
 
