@@ -35,6 +35,24 @@ view shows the same three states with friendlier wording (Not yet / Achieved /
 Cooling off). The cooling-off state exists to space out re-attempts and manage TA
 workload.
 
+```mermaid
+stateDiagram-v2
+    direction LR
+    na: Not assessed (no row)
+    ac: Achieved
+    co: Cooling off
+    [*] --> na
+    na --> ac
+    na --> co
+    ac --> na
+    ac --> co
+    co --> ac
+    co --> na
+```
+
+*Any button sets any state directly (one tap). Entering "Cooling off" records a
+timestamp, which the student view counts 48h down from.*
+
 The cooldown is time-based (48 hours from the recorded time). The student view
 **displays** the remaining time ("Cooling off (Nh left)"), computed live from
 `date_recorded`. This is display only: enforcement (actually blocking a
@@ -58,6 +76,23 @@ sessions.)
 - **Development mode:** the CAS user is hardcoded and the app runs directly, so
   no Apache, CAS, or VPN is needed to develop locally.
 
+### Tap-to-save flow
+
+What happens on a single tap in the staff view:
+
+```mermaid
+flowchart LR
+    A([Tap a button]) --> B[mark.js reads the data- attributes]
+    B --> C[POST /save/student/competency/state]
+    C --> D[Flask save_mark]
+    D --> E[(SQLite: insert, replace, or delete)]
+    E --> F[200 OK]
+    F --> G[Button highlight updates in place]
+```
+
+The button only changes color after the save succeeds, so the screen always
+reflects what is actually in the database.
+
 ## Data model
 
 The schema and seed data live in `schema.sql` and `seed.sql`. The live database
@@ -71,6 +106,35 @@ The schema and seed data live in `schema.sql` and `seed.sql`. The live database
   foreign keys to `students` and `competencies`.
 - **settings** — `key` (TEXT, primary key), `value`. Holds configuration such as
   admin usernames and academic years.
+
+```mermaid
+erDiagram
+    students ||--o{ achievements : "has"
+    competencies ||--o{ achievements : "has"
+    students {
+        TEXT student_number PK
+        TEXT first_name
+        TEXT last_name
+    }
+    competencies {
+        INTEGER id PK
+        TEXT name
+        TEXT description
+    }
+    achievements {
+        TEXT student_number FK
+        INTEGER competency_id FK
+        TEXT status
+        TEXT date_recorded
+    }
+    settings {
+        TEXT key PK
+        TEXT value
+    }
+```
+
+*`achievements` links a student to a competency; its composite primary key is
+(`student_number`, `competency_id`). `settings` stands alone.*
 
 ### How state is stored
 
