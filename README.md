@@ -89,17 +89,17 @@ From the project folder:
 
 ```
 source venv/bin/activate     # activate the virtualenv
-flask --app app run --debug --port 5001
+flask --app app run --debug --port 8080
 ```
 
-Then open `http://127.0.0.1:5001/` in a browser (the home page lists the
+Then open `http://127.0.0.1:8080/` in a browser (the home page lists the
 students).
 
 Notes:
 - Flask is installed inside the virtualenv, not globally, so the activate step is
   required.
 - `--debug` enables auto-reload on save and full error pages in the browser.
-- Port 5001 avoids macOS AirPlay Receiver, which can silently claim port 5000.
+- Port 8080 avoids macOS AirPlay Receiver, which can silently claim port 5000.
 - Use `python3` (not `python`) for running scratch files directly. The server
   itself is started via `flask run`.
 
