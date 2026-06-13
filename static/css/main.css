@@ -135,7 +135,7 @@ h1 {
     border-color: #f1a208;
     color: #1a1a1a;
 }
-.mark-btn.is-active[data-state="blank"] {
+.mark-btn.is-active[data-state="unassessed"] {
     background: #5f6571;
     border-color: #5f6571;
     color: #fff;
