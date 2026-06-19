@@ -9,7 +9,7 @@ app.config['ENV'] = 'development'
 STATE_LABELS = {
     'achieved': 'Achieved',
     'unassessed': 'Not assessed',
-    'cooling_off': 'Cooling off',
+    'cooling_off': 'Available to retry',
 }
 
 # Buttons shown per competency on the marking page, in display order.
@@ -51,15 +51,15 @@ def parse_timestamp(value):
     return None
 
 def cooling_off_label(date_recorded):
-    # "Cooling off (Nh left)", counting 48h down from when it was recorded.
+    # Non-negative, student-facing wording (decided June 15: replace "Cooling off").
     recorded = parse_timestamp(date_recorded)
     if recorded is None:
         return STATE_LABELS['cooling_off']
     remaining = COOLDOWN - (datetime.now(timezone.utc) - recorded)
     if remaining <= timedelta(0):
-        return STATE_LABELS['cooling_off'] + ' (ready to retry)'
+        return 'Available to retry now'
     hours_left = int(remaining.total_seconds() // 3600)
-    return STATE_LABELS['cooling_off'] + ' (' + str(hours_left) + 'h left)'
+    return 'Available to retry in ' + str(hours_left) + 'h'
 
 
 def page_header():
