@@ -1,8 +1,7 @@
 # Competencies App
 
-A Flask web app for tracking student competencies for Fall 2026 for CPS109 Computer Science I Python programming.
-Students demonstrate competencies in lab; instructors and TAs record them in real
-time. No lectures, assignments, or exams.
+A Flask web app for tracking student competencies for the CPS109 course at TMU in Fall 2026, which is an introductory course to Python programming.
+Students demonstrate competencies in lab; instructors and TAs record them in real time. No lectures, assignments, or exams.
 
 ## Quick start
 
