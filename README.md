@@ -1,6 +1,6 @@
 # Competencies App
 
-A Flask web app for tracking student competencies in a competency-based course.
+A Flask web app for tracking student competencies for Fall 2026 for CPS109 Computer Science I Python programming.
 Students demonstrate competencies in lab; instructors and TAs record them in real
 time. No lectures, assignments, or exams.
 
