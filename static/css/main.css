@@ -12,16 +12,25 @@ a {
     color: #1a5fb4;
 }
 
-/* Persistent header: app title links home from every page. */
+/* Persistent header: app title links home, plus who you're signed in as. */
 .site-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
     border-bottom: 1px solid #d6d9df;
     padding-bottom: 0.6rem;
     margin-bottom: 1.2rem;
 }
-.site-header a {
+.site-title {
     font-size: 1.2rem;
     font-weight: 700;
     color: #1a1a1a;
+}
+.whoami {
+    margin-left: auto;
+    font-size: 0.9rem;
+    color: #5f6571;
 }
 
 h1 {
@@ -156,4 +165,21 @@ h1 {
         flex: 0 0 auto;
         min-width: 96px;
     }
+}
+
+/* Dev sign-in page */
+.login-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.login-form input {
+    flex: 1;
+    max-width: 320px;
+    padding: 0.5rem 0.6rem;
+    font-size: 1rem;
+}
+.login-error {
+    color: #b60205;
+    margin: 0.6rem 0;
 }

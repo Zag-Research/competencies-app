@@ -1,11 +1,13 @@
 from contextlib import closing
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from flask import Flask, request, url_for
+from flask import Flask, request, url_for, session, redirect
 from myhtml import *
 
 app = Flask(__name__)
 app.config['ENV'] = 'development'
+# Dev-only secret so Flask can sign session cookies. Use a real secret in production.
+app.secret_key = 'dev-only-change-me'
 STATE_LABELS = {
     'achieved': 'Achieved',
     'unassessed': 'Not assessed',
@@ -30,6 +32,28 @@ def userCas(user=None):
     if not user:
         user = casUser
     return user, casUser
+
+def current_user():
+    # Interim session-based identity (CAS replaces this later). Returns (user, role).
+    return session.get('user'), session.get('role')
+
+def lookup_role(username):
+    # Interim role lookup: 'staff' if listed in the 'admins' setting, else
+    # 'student' if it matches a student_number, else None (unrecognized).
+    with closing(sqlite3.connect("course-data.db")) as connection:
+        with closing(connection.cursor()) as sql:
+            row = sql.execute(
+                "select value from settings where key = 'admins'").fetchone()
+            admins = row[0].split() if row else []
+            if username in admins:
+                return 'staff'
+            student = sql.execute(
+                "select student_number from students where student_number = ?",
+                (username,)
+            ).fetchone()
+            if student:
+                return 'student'
+    return None
 
 def achievement_state(competency_id, states):
     # states maps competency_id -> recorded status. No row means 'unassessed'.
@@ -63,13 +87,59 @@ def cooling_off_label(date_recorded):
 
 
 def page_header():
-    # Banner shown on every page; the title always links back home.
-    return div(a('Competency Tracker', href=url_for('index'))).classes('site-header')
+    # Banner on every page: title links home, plus who you're signed in as.
+    header = div().classes('site-header')
+    header += a('Competency Tracker', href=url_for('index')).classes('site-title')
+    user, role = current_user()
+    if user:
+        header += span('Signed in as ' + user + ' (' + role + ')').classes('whoami')
+        header += a('Switch user', href=url_for('login')).classes('back-link')
+    return header
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        role = lookup_role(username)
+        if role is None:
+            error = '"' + username + '" is not a known staff username or student number.'
+        else:
+            session['user'] = username
+            session['role'] = role
+            if role == 'staff':
+                return redirect(url_for('index'))
+            return redirect(url_for('view_student', student_number=username))
+    # GET, or a failed POST: show the sign-in form
+    p = page()
+    p += div(a('Competency Tracker', href=url_for('login')).classes('site-title')).classes('site-header')
+    p += h1('Sign in')
+    p += div('Temporary dev login (CAS replaces this later). Enter a staff '
+             'username like "dmason", or a student number to sign in as that '
+             'student.').classes('subnav')
+    if error:
+        p += div(error).classes('login-error')
+    f = form(method='post').classes('login-form')
+    f += input(type='text', name='username', placeholder='username or student number')
+    f += button('Sign in', type='submit').classes('roster-link')
+    p += f
+    return str(p)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 
 @app.route('/')
 def index():
-    user, casUser = userCas()
+    user, role = current_user()
+    if user is None:
+        return redirect(url_for('login'))
+    if role == 'student':
+        return redirect(url_for('view_student', student_number=user))
     p = page()
     p += page_header()
     p += h1('Students')
