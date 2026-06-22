@@ -36,16 +36,16 @@ Three pages:
 ## Competency states
 
 Each competency is in one of three states per student: **Not assessed** (no record
-yet), **Achieved**, or **Cooling off** (attempted, did not pass). The staff button
-for the last one reads "Not passed" (the action being recorded); the student view
-shows it as "Available to retry" (with the time remaining).
+yet), **Achieved**, or **Not passed** (attempted, did not pass, then a cooldown
+before retrying). Staff mark the third one "Not passed"; the student view shows it
+as "Available to retry" with the time remaining.
 
 ```mermaid
 stateDiagram-v2
     direction LR
     na: Not assessed (no row)
     ac: Achieved
-    co: Cooling off
+    co: Not passed
     [*] --> na
     na --> ac
     na --> co
@@ -55,10 +55,11 @@ stateDiagram-v2
     co --> na
 ```
 
-Cooling off spaces out re-attempts. The cooldown is 48h from the recorded time,
-and the student view shows the time remaining ("Cooling off (Nh left)"), computed
-live from `date_recorded`. This is display only: enforcement (blocking a
-re-attempt during the window) is not built yet, pending the exact rule.
+This cooldown spaces out re-attempts. In the code today it is 48h from the recorded
+time, shown to the student as "Available to retry in Nh", computed live from
+`date_recorded`. It is display only: nothing yet blocks a re-attempt during the
+window. (Decided June 15, not yet implemented: the cooldown should be two calendar
+days, unlocking at 8 AM.)
 
 ## Architecture
 
