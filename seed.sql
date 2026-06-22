@@ -10,3 +10,8 @@ INSERT INTO competencies (name, description) VALUES ('Pointers', 'a special prog
 -- achievements (student_number, competency_id, status, date_recorded)
 INSERT INTO achievements VALUES('600990517', 1, 'achieved', '2026-06-05 15:13');
 INSERT INTO achievements VALUES('500880917', 2,'achieved', '2026-06-05 15:13');
+
+-- requests (the evaluation queue): student_number, competency_id, seat, requested_at, status
+-- datetime('now') stamps them at rebuild time so they count as "today"
+INSERT INTO requests (student_number, competency_id, seat, requested_at, status) VALUES ('600990517', 1, '3', datetime('now'), 'waiting');
+INSERT INTO requests (student_number, competency_id, seat, requested_at, status) VALUES ('500880917', 2, '5', datetime('now'), 'waiting');
