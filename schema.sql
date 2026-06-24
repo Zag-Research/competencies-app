@@ -42,3 +42,5 @@ CREATE TABLE requests (
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 INSERT INTO settings VALUES('admins','dmason lfortune');
 INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
+-- max competencies a student may request per day (Dave to confirm exact number)
+INSERT INTO settings VALUES('daily_cap','6');

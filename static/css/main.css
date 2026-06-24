@@ -167,6 +167,89 @@ h1 {
     }
 }
 
+/* Evaluation queue — student sign-up form */
+.queue-check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    cursor: pointer;
+    border-bottom: 1px solid #ececec;
+}
+.queue-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #ececec;
+}
+.queue-seat {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.9rem 0;
+}
+.queue-seat input {
+    width: 80px;
+    padding: 0.4rem 0.6rem;
+    font-size: 1rem;
+}
+.queue-empty {
+    color: #5f6571;
+    padding: 0.8rem 0;
+}
+.queue-allowance {
+    color: #5f6571;
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+.queue-notice {
+    background: #fdf0d5;
+    color: #8a5a00;
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 1rem;
+}
+
+/* Evaluation queue — staff view, one card per waiting student */
+.queue-card {
+    border: 1px solid #d6d9df;
+    border-radius: 10px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1rem;
+}
+.queue-card-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+}
+.queue-card-name {
+    font-weight: 700;
+    font-size: 1.05rem;
+}
+.queue-card-seat {
+    color: #5f6571;
+    font-size: 0.9rem;
+}
+.queue-card .queue-row:last-child {
+    border-bottom: none;
+}
+/* The two outcome buttons sit side by side on each competency row. */
+.queue-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+.queue-yes {
+    border-color: #2e7d32;
+    color: #1e6b30;
+}
+.queue-no {
+    border-color: #f1a208;
+    color: #8a5a00;
+}
+
 /* Dev sign-in page */
 .login-form {
     display: flex;

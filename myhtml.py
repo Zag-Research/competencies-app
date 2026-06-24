@@ -101,6 +101,8 @@ class td(element):
 		self += html
 class a(element):
 	pass
+class label(element):
+	pass
 class script(element):
 	pass
 
