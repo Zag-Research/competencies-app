@@ -1,0 +1,4 @@
+Flask>=3.0
+# America/Toronto timezone data for the retry rule, for systems without a
+# system tz database (Linux containers, some Windows setups). Harmless on macOS.
+tzdata
