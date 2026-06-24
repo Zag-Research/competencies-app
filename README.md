@@ -111,6 +111,16 @@ each file has one reason to change:
 - A request flows: **route** (a blueprint) → asks **`db.py`** for data and
   **`logic.py`** for rule answers → builds a page with **`myhtml.py`** → returns
   the HTML string.
+
+```mermaid
+flowchart LR
+    Browser([Browser]) -->|HTTP request| Route[Blueprint route<br/>auth / main / mark / queue]
+    Route -->|"current_user, page_header"| Common[common.py]
+    Route -->|queries| DB[(db.py → SQLite)]
+    Route -->|"rules: states, retry"| Logic[logic.py]
+    Route -->|builds page| MyHTML[myhtml.py]
+    MyHTML -->|HTML string| Browser
+```
 - **Production:** runs under Apache via `mod_wsgi`, with TMU CAS auth
   (`mod_auth_cas` sets a `Cas-User` header). In development the CAS user is
   hardcoded, so no Apache, CAS, or VPN is needed.
