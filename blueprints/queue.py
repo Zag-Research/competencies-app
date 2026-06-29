@@ -90,6 +90,31 @@ def queue_staff_view():
     p += page_header()
     p += h1('Evaluation queue')
     p += div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
+    # One-shot "you just marked X — Undo" banner, set by queue_mark. Popped so it
+    # shows once, right after the mark.
+    undo = session.pop('queue_undo', None)
+    if undo:
+        with db.cursor() as sql:
+            row = sql.execute(
+                """select s.first_name, s.last_name, c.name
+                   from requests r
+                   join students s on r.student_number = s.student_number
+                   join competencies c on r.competency_id = c.id
+                   where r.id = ?""",
+                (undo['rid'],)
+            ).fetchone()
+        if row:
+            first, last, comp = row
+            outcome = 'Achieved' if undo['state'] == 'achieved' else 'Not passed'
+            banner = div().classes('queue-notice')
+            banner += span('Marked ' + comp + ' for ' + first + ' ' + last
+                           + ' as ' + outcome + '.')
+            banner += form(
+                button('Undo', type='submit').classes('roster-link'),
+                method='post',
+                action=url_for('queue.queue_undo', request_id=undo['rid'])
+            )
+            p += banner
     with db.cursor() as sql:
         rows = sql.execute(
             """select r.id, r.student_number, s.first_name, s.last_name,
@@ -220,6 +245,33 @@ def queue_mark(request_id, state):
             )
             sql.execute(
                 "update requests set status = 'done' where id = ?",
+                (request_id,)
+            )
+            # Remember this mark so the queue can offer a one-shot Undo.
+            session['queue_undo'] = {'rid': request_id, 'state': state}
+    return redirect(url_for('queue.queue'))
+
+
+@queue_bp.route('/queue/undo/<int:request_id>', methods=['POST'])
+def queue_undo(request_id):
+    # Reverse the most recent queue mark: drop the recorded result and put the
+    # request back to 'waiting' so the student reappears in the queue.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    with db.cursor() as sql:
+        req = sql.execute(
+            "select student_number, competency_id from requests where id = ?",
+            (request_id,)
+        ).fetchone()
+        if req is not None:
+            student_number, competency_id = req
+            sql.execute(
+                "delete from achievements where student_number = ? and competency_id = ?",
+                (student_number, competency_id)
+            )
+            sql.execute(
+                "update requests set status = 'waiting' where id = ?",
                 (request_id,)
             )
     return redirect(url_for('queue.queue'))

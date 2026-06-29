@@ -205,6 +205,10 @@ h1 {
     margin-bottom: 0.6rem;
 }
 .queue-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
     background: #fdf0d5;
     color: #8a5a00;
     border-radius: 8px;
