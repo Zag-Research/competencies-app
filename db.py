@@ -66,6 +66,64 @@ def lookup_role(username):
     return None
 
 
+# How long a TA's claim on a student lasts before it is treated as abandoned.
+DEFAULT_CLAIM_TIMEOUT_MINUTES = 20
+
+
+def claim_timeout_minutes():
+    return int(get_setting('claim_timeout_minutes', DEFAULT_CLAIM_TIMEOUT_MINUTES))
+
+
+def claim_cutoff():
+    # SQLite modifier for "claimed longer ago than the timeout", e.g. '-20 minutes'.
+    # Passed as a bind parameter to datetime('now', ?).
+    return '-' + str(claim_timeout_minutes()) + ' minutes'
+
+
+# A request is up for grabs if nobody holds it, or if whoever holds it has been
+# sitting on it past the timeout (they closed their laptop, lost wifi, went home).
+# Used both to list the queue and to guard the claim itself, so the two can never
+# disagree about who is available.
+AVAILABLE = """(status = 'waiting'
+                or (status = 'claimed' and claimed_at < datetime('now', ?)))"""
+
+
+def claim_student(sql, student_number, evaluator):
+    """Try to claim every available request for one student. True if we got them.
+
+    Two TAs can tap the same student at the same moment. The guard against both
+    winning is the WHERE clause: it only matches requests that are still
+    available, and the winner's own write is what makes that false for everyone
+    else. So the loser's UPDATE matches no rows and changes nothing.
+
+    That means the row count IS the answer. Changed some rows -> the student is
+    ours. Changed zero -> another TA got there first.
+
+    Doing this as one conditional UPDATE (rather than SELECT-then-UPDATE) is the
+    whole point: a separate check and write leaves a gap where both TAs read
+    'waiting', both decide they won, and both walk over.
+    """
+    sql.execute(
+        """update requests
+              set status = 'claimed', claimed_by = ?, claimed_at = CURRENT_TIMESTAMP
+            where student_number = ?
+              and """ + AVAILABLE,
+        (evaluator, student_number, claim_cutoff())
+    )
+    return sql.rowcount > 0
+
+
+def release_student(sql, student_number, evaluator):
+    # Hand a student back to the queue. Scoped to this evaluator's own claims so a
+    # TA can never release a student out from under someone else.
+    sql.execute(
+        """update requests
+              set status = 'waiting', claimed_by = null, claimed_at = null
+            where student_number = ? and status = 'claimed' and claimed_by = ?""",
+        (student_number, evaluator)
+    )
+
+
 def requests_used_today(sql, student_number):
     # Count every request the student made today (waiting or already handled):
     # the cap is about slots claimed per day, not just what is still pending.
