@@ -113,6 +113,41 @@ def claim_student(sql, student_number, evaluator):
     return sql.rowcount > 0
 
 
+def claim_competency_group(sql, competency_id, evaluator):
+    """Claim every student with an available request for one competency.
+
+    Returns (won, lost): how many students we got, and how many another TA had
+    already taken since the page was rendered.
+
+    Note this claims each student *whole*, not just their request for this one
+    competency. A student can only talk to one TA at a time, so handing the same
+    student to two TAs (one per competency) just moves the collision out of the
+    queue and into the room. The cost is that a student claimed here drops out of
+    every other competency's cohort until this TA is done with them.
+    """
+    students = sql.execute(
+        "select distinct student_number from requests"
+        " where competency_id = ? and " + AVAILABLE,
+        (competency_id, claim_cutoff())
+    ).fetchall()
+    won = 0
+    for (student_number,) in students:
+        if claim_student(sql, student_number, evaluator):
+            won += 1
+    return won, len(students) - won
+
+
+def release_students_for_competency(sql, competency_id, evaluator):
+    # Hand a whole cohort back. Scoped to this evaluator's own claims.
+    students = sql.execute(
+        """select distinct student_number from requests
+            where competency_id = ? and status = 'claimed' and claimed_by = ?""",
+        (competency_id, evaluator)
+    ).fetchall()
+    for (student_number,) in students:
+        release_student(sql, student_number, evaluator)
+
+
 def release_student(sql, student_number, evaluator):
     # Hand a student back to the queue. Scoped to this evaluator's own claims so a
     # TA can never release a student out from under someone else.

@@ -85,18 +85,27 @@ def queue_student_view(student_number):
     return str(p)
 
 
-def queue_staff_view():
+def queue_staff_view(group_by='student'):
     p = page()
     p += page_header()
     p += h1('Evaluation queue')
-    p += div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
+    nav = div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
+    # Same requests, two groupings: work through one student at a time, or work
+    # through everyone who wants the same competency.
+    for (key, text) in (('student', 'By student'), ('competency', 'By competency')):
+        link = a(text, href=url_for('queue.queue', group=key)).classes('queue-toggle')
+        if key == group_by:
+            link.addClasses('is-active')
+        nav += link
+    p += nav
     # One-shot notice, e.g. losing a race to claim a student, or releasing one.
     notice = session.pop('queue_notice', None)
     if notice:
         p += div(notice).classes('queue-notice')
     with db.cursor() as sql:
         rows = sql.execute(
-            """select r.student_number, s.first_name, s.last_name, c.name, r.seat
+            """select r.student_number, s.first_name, s.last_name,
+                      r.competency_id, c.name, r.seat
                  from requests r
                  join students s on r.student_number = s.student_number
                  join competencies c on r.competency_id = c.id
@@ -107,15 +116,24 @@ def queue_staff_view():
     if not rows:
         p += div('Queue is empty.').classes('queue-empty')
         return str(p)
+    if group_by == 'competency':
+        p += queue_by_competency(rows)
+    else:
+        p += queue_by_student(rows)
+    return str(p)
+
+
+def queue_by_student(rows):
     # Group the flat rows by student so each student shows once, with all their
     # requested competencies listed under them. Insertion order (Python dict)
     # preserves the requested_at ordering from the query, so the student who has
     # waited longest stays at the top.
     students = {}
-    for (number, first, last, comp_name, seat) in rows:
+    for (number, first, last, _cid, comp_name, seat) in rows:
         if number not in students:
             students[number] = {'name': last + ', ' + first, 'seat': seat, 'items': []}
         students[number]['items'].append(comp_name)
+    out = div()
     for (number, group) in students.items():
         # The whole card is one button: claiming the student and opening their
         # evaluation screen is a single action, so no TA can walk over to a student
@@ -130,7 +148,121 @@ def queue_staff_view():
         for comp_name in group['items']:
             b += div(span(comp_name).classes('progress-name')).classes('queue-row')
         card += b
-        p += card
+        out += card
+    return out
+
+
+def queue_by_competency(rows):
+    # Same rows, grouped the other way: one card per competency, listing everyone
+    # waiting on it, so a TA can evaluate the whole cohort in one pass instead of
+    # repeating the same evaluation student by student.
+    comps = {}
+    for (_number, first, last, cid, comp_name, seat) in rows:
+        if cid not in comps:
+            comps[cid] = {'name': comp_name, 'students': []}
+        comps[cid]['students'].append((last + ', ' + first, seat))
+    out = div()
+    for (cid, group) in comps.items():
+        card = form(method='post',
+                    action=url_for('queue.queue_claim_group', competency_id=cid))
+        b = button(type='submit').classes('queue-card', 'queue-claim')
+        count = len(group['students'])
+        b += div(
+            span(group['name']).classes('queue-card-name'),
+            span(str(count) + (' student' if count == 1 else ' students')
+                 ).classes('queue-card-seat'),
+        ).classes('queue-card-head')
+        for (name, seat) in group['students']:
+            b += div(
+                span(name).classes('progress-name'),
+                span('seat ' + seat).classes('queue-card-seat'),
+            ).classes('queue-row')
+        card += b
+        out += card
+    return out
+
+
+def queue_cohort_view(competency_id, evaluator):
+    """The claimed cohort: everyone this TA took for one competency, marked together."""
+    p = page()
+    p += page_header()
+    undo = session.pop('queue_undo', None)
+    with db.cursor() as sql:
+        comp = sql.execute(
+            "select name from competencies where id = ?", (competency_id,)
+        ).fetchone()
+        if comp is None:
+            p += h1('Competency not found')
+            return str(p)
+        rows = sql.execute(
+            """select r.id, r.student_number, s.first_name, s.last_name, r.seat
+                 from requests r
+                 join students s on r.student_number = s.student_number
+                where r.competency_id = ? and r.status = 'claimed'
+                  and r.claimed_by = ?
+                order by r.requested_at""",
+            (competency_id, evaluator)
+        ).fetchall()
+        undo_row = None
+        if undo:
+            undo_row = sql.execute(
+                """select s.first_name, s.last_name from requests r
+                   join students s on r.student_number = s.student_number
+                   where r.id = ?""",
+                (undo['rid'],)
+            ).fetchone()
+    p += h1('Evaluating: ' + comp[0])
+    p += div(a('← Back to queue',
+               href=url_for('queue.queue', group='competency'))).classes('subnav')
+    notice = session.pop('queue_notice', None)
+    if notice:
+        p += div(notice).classes('queue-notice')
+    if undo_row:
+        outcome = 'Achieved' if undo['state'] == 'achieved' else 'Not passed'
+        banner = div().classes('queue-notice')
+        banner += span('Marked ' + undo_row[0] + ' ' + undo_row[1]
+                       + ' as ' + outcome + '.')
+        banner += form(
+            button('Undo', type='submit').classes('roster-link'),
+            method='post',
+            action=url_for('queue.queue_undo', request_id=undo['rid'],
+                           back='competency')
+        )
+        p += banner
+    if not rows:
+        p += div('Nobody left to evaluate for this competency.').classes('queue-empty')
+        p += div(a('← Back to queue', href=url_for('queue.queue', group='competency')
+                   ).classes('roster-link')).classes('subnav')
+        return str(p)
+    for (rid, student_number, first, last, seat) in rows:
+        actions = div().classes('queue-actions')
+        actions += form(
+            button('Achieved', type='submit').classes('roster-link', 'queue-yes'),
+            method='post',
+            action=url_for('queue.queue_mark', request_id=rid, state='achieved',
+                           back='competency')
+        )
+        actions += form(
+            button('Not passed', type='submit').classes('roster-link', 'queue-no'),
+            method='post',
+            action=url_for('queue.queue_mark', request_id=rid, state='cooling_off',
+                           back='competency')
+        )
+        # Claiming the cohort claimed each student whole, so this TA also holds
+        # whatever else they asked for. Link through so it can be marked in the
+        # same visit rather than making the student rejoin the queue.
+        who = div(
+            a(last + ', ' + first,
+              href=url_for('queue.queue_evaluate', student_number=student_number)
+              ).classes('progress-name'),
+            span('seat ' + seat).classes('queue-card-seat'),
+        ).classes('queue-cohort-who')
+        p += div(who, actions).classes('queue-row')
+    p += form(
+        button('Release remaining back to queue', type='submit').classes('roster-link'),
+        method='post',
+        action=url_for('queue.queue_release_group', competency_id=competency_id)
+    ).classes('queue-release')
     return str(p)
 
 
@@ -226,7 +358,8 @@ def queue():
     if role == 'student':
         return queue_student_view(user)
     if role == 'staff':
-        return queue_staff_view()
+        group = request.args.get('group')
+        return queue_staff_view('competency' if group == 'competency' else 'student')
     return redirect(url_for('auth.login'))
 
 
@@ -276,6 +409,15 @@ def queue_cancel(request_id):
 QUEUE_MARK_STATES = {'achieved', 'cooling_off'}
 
 
+def mark_return_url(student_number, competency_id):
+    # The same request can be marked from the per-student screen or from a
+    # by-competency cohort. ?back=competency says which one we came from, so the
+    # TA lands back where they were working instead of being bounced to the other.
+    if request.args.get('back') == 'competency':
+        return url_for('queue.queue_cohort', competency_id=competency_id)
+    return url_for('queue.queue_evaluate', student_number=student_number)
+
+
 @queue_bp.route('/queue/student/<student_number>')
 def queue_evaluate(student_number):
     user, role = current_user()
@@ -312,6 +454,45 @@ def queue_release(student_number):
     return redirect(url_for('queue.queue'))
 
 
+@queue_bp.route('/queue/competency/<int:competency_id>')
+def queue_cohort(competency_id):
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    return queue_cohort_view(competency_id, user)
+
+
+@queue_bp.route('/queue/claim-group/<int:competency_id>', methods=['POST'])
+def queue_claim_group(competency_id):
+    # Take everyone waiting on one competency, so they can be evaluated as a batch.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    with db.cursor() as sql:
+        won, lost = db.claim_competency_group(sql, competency_id, user)
+    if won == 0:
+        session['queue_notice'] = 'Another TA just claimed those students.'
+        return redirect(url_for('queue.queue', group='competency'))
+    if lost > 0:
+        # A partial win. Say so rather than quietly showing a short cohort, or the
+        # TA thinks students went missing.
+        session['queue_notice'] = (
+            str(lost) + ' of those students had just been claimed by another TA.'
+        )
+    return redirect(url_for('queue.queue_cohort', competency_id=competency_id))
+
+
+@queue_bp.route('/queue/release-group/<int:competency_id>', methods=['POST'])
+def queue_release_group(competency_id):
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    with db.cursor() as sql:
+        db.release_students_for_competency(sql, competency_id, user)
+    session['queue_notice'] = 'Students released back to the queue.'
+    return redirect(url_for('queue.queue', group='competency'))
+
+
 @queue_bp.route('/queue/mark/<int:request_id>/<state>', methods=['POST'])
 def queue_mark(request_id, state):
     # Record the result on the student's achievements AND clear the request, in one
@@ -341,7 +522,7 @@ def queue_mark(request_id, state):
         )
         # Remember this mark so the evaluation screen can offer a one-shot Undo.
         session['queue_undo'] = {'rid': request_id, 'state': state}
-    return redirect(url_for('queue.queue_evaluate', student_number=student_number))
+    return redirect(mark_return_url(student_number, competency_id))
 
 
 @queue_bp.route('/queue/undo/<int:request_id>', methods=['POST'])
@@ -371,4 +552,4 @@ def queue_undo(request_id):
                 where id = ?""",
             (user, request_id)
         )
-    return redirect(url_for('queue.queue_evaluate', student_number=student_number))
+    return redirect(mark_return_url(student_number, competency_id))

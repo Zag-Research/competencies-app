@@ -1,6 +1,10 @@
--- students
+-- students. More than two so the by-competency queue has a cohort worth looking
+-- at: sign several of them up for the same competency to see them grouped.
 INSERT INTO students VALUES('Priya', 'Singh', '600990517');
 INSERT INTO students VALUES('Sarah', 'Hassan', '500880917');
+INSERT INTO students VALUES('Alice', 'Chen', '500111111');
+INSERT INTO students VALUES('Ben', 'Okafor', '500222222');
+INSERT INTO students VALUES('Chloe', 'Diaz', '500333333');
 
 -- competencies
 INSERT INTO competencies (name, description) VALUES ('Nested loops', 'a programming structure where one loop is placed entirely inside the body of another loop');
