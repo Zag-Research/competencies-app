@@ -55,10 +55,18 @@ their own progress page. The main pages:
 - **Student view** (`/view/<student_number>`): read-only progress, each
   competency shown as a colored status pill.
 - **Evaluation queue** (`/queue`): the lab coordination layer.
-  - *Students* sign up for the competencies they want evaluated today and enter
-    their seat number; they can cancel their own requests. Only competencies they
-    can actually attempt appear (not assessed, or past their retry window), capped
-    at a configurable number of requests per day.
+  - *Students* sign up for the competencies they want evaluated today; they can
+    cancel their own requests. Only competencies they can actually attempt appear
+    (not assessed, or past their retry window), capped at a configurable number of
+    requests per day.
+
+    Sign-up asks for **no seat number**, because students sign up before they get
+    to the lab (from home, on the way in) and seats are not assigned: you take
+    whichever machine is free. They enter a seat once they are actually sitting
+    down, and **that is what makes them visible to staff**. A request with no seat
+    is a plan, not a person a TA can walk over to, so the staff queue does not list
+    it. Leaving the lab clears the seat, which drops them off the staff queue
+    without cancelling what they signed up for.
   - *Staff* see the waiting students, longest-waiting first, in one of two
     groupings (toggle at the top of the queue):
     - **By student** (`/queue?group=student`): one card per student, listing the
@@ -88,8 +96,9 @@ winner (`db.claim_student`):
 update requests
    set status = 'claimed', claimed_by = ?, claimed_at = CURRENT_TIMESTAMP
  where student_number = ?
-   and (status = 'waiting'
-        or (status = 'claimed' and claimed_at < datetime('now', ?)));
+   and (seat is not null and seat != ''
+        and (status = 'waiting'
+             or (status = 'claimed' and claimed_at < datetime('now', ?))));
 ```
 
 `rowcount > 0` → the student is yours. `rowcount == 0` → another TA got there
@@ -119,6 +128,12 @@ disagree about who is free.
 **Undo** returns a request to `claimed` *by the same TA*, not to `waiting`. A
 mis-tap while standing at the student's desk should not fling them back into the
 global queue for someone else to pick up.
+
+That `seat is not null` at the top of the predicate is the "is the student actually
+here?" check (see above). It lives in `db.AVAILABLE`, which is used both to list the
+queue and to guard the claim, so the two can never disagree about who is free. A
+student who has not sat down cannot be listed *or* claimed, and a TA never walks
+over to an empty chair.
 
 ## Competency states
 

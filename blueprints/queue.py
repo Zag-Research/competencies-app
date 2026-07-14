@@ -26,14 +26,20 @@ def queue_student_view(student_number):
         ).fetchall():
             states[cid] = status
             recorded_at[cid] = recorded
+        # 'claimed' as well as 'waiting': a TA taking the student must not make their
+        # own queue page go blank. They still have those requests open, and someone
+        # is on the way.
         pending = sql.execute(
-            """select r.id, r.competency_id, c.name from requests r
+            """select r.id, r.competency_id, c.name, r.seat, r.status from requests r
                join competencies c on r.competency_id = c.id
-               where r.student_number = ? and r.status = 'waiting'
+               where r.student_number = ? and r.status in ('waiting', 'claimed')
                order by r.requested_at""",
             (student_number,)
         ).fetchall()
         pending_ids = {row[1] for row in pending}
+        # One seat per student: whatever their open requests say they are sitting at.
+        seat = next((row[3] for row in pending if row[3]), None)
+        being_evaluated = any(row[4] == 'claimed' for row in pending)
         all_competencies = sql.execute(
             "select id, name from competencies order by id"
         ).fetchall()
@@ -52,15 +58,46 @@ def queue_student_view(student_number):
                 available.append((cid, name))
     if pending:
         p += h2('In the queue')
-        for (rid, _cid, name) in pending:
+        # Students sign up before they get to the lab, so a request starts with no
+        # seat. Until they enter one, staff cannot see them: there is nowhere to
+        # walk to. Entering a seat is what puts them in front of a TA.
+        if being_evaluated:
+            p += div('A TA is on their way to you.').classes('queue-seat-set')
+        elif seat:
             p += div(
-                span(name).classes('progress-name'),
-                form(
+                span('You are at seat ' + seat + '. A TA will come to you.'),
+            ).classes('queue-seat-set')
+        else:
+            p += div('You are signed up. Enter your seat number when you get to '
+                     'the lab, so a TA can find you. You will not appear in the '
+                     'staff queue until you do.').classes('queue-notice')
+        f = form(method='post', action=url_for('queue.queue_seat'))
+        f += span('Seat number' if not seat else 'Moved machines?')
+        f += input(type='text', name='seat', value=seat or '', placeholder='e.g. 12')
+        f += button('I am here' if not seat else 'Update seat',
+                    type='submit').classes('roster-link')
+        p += div(f).classes('queue-seat')
+        for (rid, _cid, name, _seat, status) in pending:
+            row = div(span(name).classes('progress-name')).classes('queue-row')
+            if status == 'claimed':
+                # A TA is already standing up to come over. Cancelling now would
+                # pull the student out from under them.
+                row += span('being evaluated').classes('queue-card-seat')
+            else:
+                row += form(
                     button('Cancel', type='submit').classes('roster-link'),
                     method='post',
                     action=url_for('queue.queue_cancel', request_id=rid)
                 )
-            ).classes('queue-row')
+            p += row
+        if seat:
+            # Leaving clears the seat, which drops them out of the staff queue
+            # without cancelling what they signed up for.
+            p += form(
+                button('I have left the lab', type='submit').classes('roster-link'),
+                method='post',
+                action=url_for('queue.queue_seat')
+            ).classes('queue-release')
     if available and remaining_today > 0:
         p += h2('Sign up')
         p += div(str(remaining_today) + ' of ' + str(db.daily_cap())
@@ -71,10 +108,6 @@ def queue_student_view(student_number):
             lbl += input(type='checkbox', name='competency_ids', value=str(cid))
             lbl += span(name)
             f += lbl
-        f += div(
-            span('Seat number'),
-            input(type='text', name='seat', placeholder='e.g. 12')
-        ).classes('queue-seat')
         f += button('Join queue', type='submit').classes('roster-link')
         p += f
     elif available and remaining_today <= 0:
@@ -369,9 +402,22 @@ def queue_join():
     if user is None or role != 'student':
         return redirect(url_for('auth.login'))
     competency_ids = request.form.getlist('competency_ids')
-    seat = request.form.get('seat', '').strip()
-    if competency_ids and seat:
+    if competency_ids:
         with db.cursor() as sql:
+            # No seat yet: students sign up before they reach the lab. They enter a
+            # seat once they are sitting down (queue_seat), and that is what makes
+            # them visible to staff.
+            #
+            # If they are already seated, carry that seat onto the new requests so
+            # they do not have to say where they are twice.
+            row = sql.execute(
+                """select seat from requests
+                    where student_number = ? and seat is not null and seat != ''
+                      and status in ('waiting', 'claimed')
+                    limit 1""",
+                (user,)
+            ).fetchone()
+            seat = row[0] if row else None
             # Enforce the daily cap: only insert up to the student's remaining
             # allowance, dropping any extras they selected past the limit.
             remaining = db.daily_cap() - db.requests_used_today(sql, user)
@@ -391,14 +437,34 @@ def queue_join():
     return redirect(url_for('queue.queue'))
 
 
+@queue_bp.route('/queue/seat', methods=['POST'])
+def queue_seat():
+    # The student arrived and sat down, moved machines, or left. An empty seat means
+    # gone: they drop out of the staff queue without losing what they signed up for.
+    user, role = current_user()
+    if user is None or role != 'student':
+        return redirect(url_for('auth.login'))
+    seat = request.form.get('seat', '').strip()
+    with db.cursor() as sql:
+        db.set_seat(sql, user, seat or None)
+    if seat:
+        session['queue_notice'] = 'Seat ' + seat + ' saved. A TA will come to you.'
+    else:
+        session['queue_notice'] = ('Marked as away. You are still signed up, but '
+                                   'staff will not see you until you enter a seat.')
+    return redirect(url_for('queue.queue'))
+
+
 @queue_bp.route('/queue/cancel/<int:request_id>', methods=['POST'])
 def queue_cancel(request_id):
     user, role = current_user()
     if user is None or role != 'student':
         return redirect(url_for('auth.login'))
     with db.cursor() as sql:
+        # Only a request nobody has taken yet. Once a TA has claimed it they are on
+        # their way over, and cancelling would pull the student out from under them.
         sql.execute(
-            "delete from requests where id = ? and student_number = ?",
+            "delete from requests where id = ? and student_number = ? and status = 'waiting'",
             (request_id, user)
         )
     return redirect(url_for('queue.queue'))

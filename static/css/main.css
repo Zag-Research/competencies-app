@@ -278,6 +278,14 @@ h1 {
     align-items: baseline;
     gap: 0.6rem;
 }
+/* Confirmation that the student is checked in at a machine, so staff can see them. */
+.queue-seat-set {
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.8rem;
+    border-radius: 8px;
+    background: #eef6ee;
+    color: #23502a;
+}
 /* The two outcome buttons sit side by side on each competency row. */
 .queue-actions {
     display: flex;

@@ -80,12 +80,30 @@ def claim_cutoff():
     return '-' + str(claim_timeout_minutes()) + ' minutes'
 
 
-# A request is up for grabs if nobody holds it, or if whoever holds it has been
-# sitting on it past the timeout (they closed their laptop, lost wifi, went home).
+# A request is up for grabs if the student is actually in the lab, AND nobody holds
+# them, or whoever holds them has been sitting on it past the timeout (they closed
+# their laptop, lost wifi, went home).
+#
+# "In the lab" is just: they have a seat. Students sign up before they arrive (from
+# home, on the bus), so a request with no seat is a plan, not a person a TA can walk
+# over to. Typing a seat is the act of saying "I'm here, at this machine", and it is
+# what puts them in front of staff.
+#
 # Used both to list the queue and to guard the claim itself, so the two can never
 # disagree about who is available.
-AVAILABLE = """(status = 'waiting'
-                or (status = 'claimed' and claimed_at < datetime('now', ?)))"""
+AVAILABLE = """(seat is not null and seat != ''
+                and (status = 'waiting'
+                     or (status = 'claimed' and claimed_at < datetime('now', ?))))"""
+
+
+def set_seat(sql, student_number, seat):
+    # The student arrived and sat down (or moved machines). One seat per student, so
+    # this covers every request they have open today.
+    sql.execute(
+        """update requests set seat = ?
+            where student_number = ? and status in ('waiting', 'claimed')""",
+        (seat, student_number)
+    )
 
 
 def claim_student(sql, student_number, evaluator):
