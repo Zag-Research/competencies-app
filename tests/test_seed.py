@@ -77,3 +77,21 @@ def test_mark_page_renders_all_eighty(seeded):
     assert 'CPS109' in body and 'CPS213' in body
     # A CPS213 competency title should appear, proving the second block rendered.
     assert 'Register Circuit' in body
+
+
+def test_evaluation_screen_shows_the_competency_scope(seeded):
+    """A TA evaluating sees the sub-points, not just the competency title."""
+    with seeded.cursor() as sql:
+        # Competency 41 is CPS213 "Understands different numbering systems".
+        sql.execute(
+            """insert into requests
+                   (student_number, competency_id, seat, requested_at, status)
+               values ('500111111', 41, '12', CURRENT_TIMESTAMP, 'waiting')"""
+        )
+        seeded.claim_student(sql, '500111111', 'dmason')
+    body = signed_in_as('dmason', 'staff').get(
+        '/queue/student/500111111').get_data(as_text=True)
+    assert 'Understands different numbering systems' in body
+    # The scope from the source document's sub-points.
+    assert 'Hexadecimal' in body
+    assert 'competency-scope' in body

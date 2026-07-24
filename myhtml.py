@@ -107,6 +107,10 @@ class select(element):
 	pass
 class option(element):
 	pass
+class ul(element):
+	pass
+class li(element):
+	pass
 class script(element):
 	pass
 

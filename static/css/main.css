@@ -306,6 +306,26 @@ h1 {
     color: #5f6571;
 }
 
+/* The competency's sub-points, shown to staff while evaluating: what this
+   competency actually covers, so a TA knows what to probe. Secondary to the
+   competency name, never competing with the outcome buttons. */
+.competency-scope {
+    margin-top: 0.2rem;
+    max-width: 46rem;
+    color: #5f6571;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+/* Multi-point scopes render as a list: a seven-point competency is unreadable
+   as one run-on line. Tight margins so it stays subordinate to the name. */
+ul.competency-scope {
+    margin: 0.25rem 0 0;
+    padding-left: 1.1rem;
+}
+ul.competency-scope li {
+    margin-bottom: 0.1rem;
+}
+
 /* Peer shout-out: thank a classmate from a dropdown on your own progress page. */
 .endorse-select {
     padding: 0.4rem 0.5rem;

@@ -220,6 +220,23 @@ def queue_by_competency(rows):
     return out
 
 
+def competency_scope(description):
+    """The competency's sub-points, rendered so a TA can scan them.
+
+    Descriptions are stored as the source document's sub-points joined with
+    '; '. Split them back out: a seven-point competency like Flip Flops is
+    unreadable as one run-on line but fine as seven bullets. A competency whose
+    scope is a single phrase stays plain text rather than a one-item list.
+    """
+    parts = [part.strip() for part in description.split(';') if part.strip()]
+    if len(parts) <= 1:
+        return div(description).classes('competency-scope')
+    items = ul().classes('competency-scope')
+    for part in parts:
+        items += li(part)
+    return items
+
+
 def queue_cohort_view(competency_id, evaluator):
     """The claimed cohort: everyone this TA took for one competency, marked together."""
     p = page()
@@ -227,7 +244,8 @@ def queue_cohort_view(competency_id, evaluator):
     undo = session.pop('queue_undo', None)
     with db.cursor() as sql:
         comp = sql.execute(
-            "select name from competencies where id = ?", (competency_id,)
+            "select name, description from competencies where id = ?",
+            (competency_id,)
         ).fetchone()
         if comp is None:
             p += h1('Competency not found')
@@ -252,6 +270,9 @@ def queue_cohort_view(competency_id, evaluator):
     p += h1('Evaluating: ' + comp[0])
     p += div(a('← Back to queue',
                href=url_for('queue.queue', group='competency'))).classes('subnav')
+    # Scope for the one competency this whole cohort is being evaluated on.
+    if comp[1]:
+        p += competency_scope(comp[1])
     notice = session.pop('queue_notice', None)
     if notice:
         p += div(notice).classes('queue-notice')
@@ -322,7 +343,7 @@ def queue_evaluate_view(student_number, evaluator):
         # Only this evaluator's own claims. If their claim went stale and someone
         # else took the student, this comes back empty and they are told so.
         rows = sql.execute(
-            """select r.id, c.name, r.seat
+            """select r.id, c.name, r.seat, c.description
                  from requests r
                  join competencies c on r.competency_id = c.id
                 where r.student_number = ? and r.status = 'claimed'
@@ -364,7 +385,7 @@ def queue_evaluate_view(student_number, evaluator):
         p += div(a('← Back to queue',
                    href=url_for('queue.queue')).classes('roster-link')).classes('subnav')
         return str(p)
-    for (rid, comp_name, _seat) in rows:
+    for (rid, comp_name, _seat, comp_desc) in rows:
         # Two one-tap outcomes per competency; each records the result and clears
         # the request at once.
         actions = div().classes('queue-actions')
@@ -387,10 +408,13 @@ def queue_evaluate_view(student_number, evaluator):
             method='post',
             action=url_for('queue.queue_decline', request_id=rid)
         )
-        p += div(
-            span(comp_name).classes('progress-name'),
-            actions,
-        ).classes('queue-row')
+        # The competency's sub-points, as a reminder of what this competency
+        # actually covers. This is the facilitation scope: a TA who has not
+        # prepared this one can see what to probe before deciding to decline it.
+        who = div(span(comp_name).classes('progress-name'))
+        if comp_desc:
+            who += competency_scope(comp_desc)
+        p += div(who, actions).classes('queue-row')
     # Backing out has to be possible, or a TA who claims by mistake strands the
     # student where no other TA can see them.
     p += form(
