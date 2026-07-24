@@ -177,6 +177,31 @@ def release_student(sql, student_number, evaluator):
     )
 
 
+def release_request(sql, request_id, evaluator):
+    """Hand ONE competency back to the queue, keeping the rest of the claim.
+
+    For the TA who can evaluate this student, just not this one competency: they
+    have not prepared it, or it is outside what they are comfortable assessing.
+    Only this request returns to 'waiting'. Everything else they claimed for the
+    student stays with them, so the rest still gets done in the same sitting.
+
+    Deliberately NOT a result. Nothing is written to achievements, so declining
+    starts no cooling-off period and costs the student nothing. The row already
+    existed and is only changing status, so the daily cap is untouched too: this
+    is the same request going back on the list, not a new one.
+
+    Scoped to this evaluator's own claim, so a TA cannot bounce a request out
+    from under someone else. True if we actually released something.
+    """
+    sql.execute(
+        """update requests
+              set status = 'waiting', claimed_by = null, claimed_at = null
+            where id = ? and status = 'claimed' and claimed_by = ?""",
+        (request_id, evaluator)
+    )
+    return sql.rowcount > 0
+
+
 def requests_used_today(sql, student_number):
     # Count every request the student made today (waiting or already handled):
     # the cap is about slots claimed per day, not just what is still pending.
@@ -187,3 +212,57 @@ def requests_used_today(sql, student_number):
         (student_number,)
     ).fetchone()
     return row[0] if row else 0
+
+
+# --- peer helpfulness (endorsements) ------------------------------------
+
+def classmates(sql, student_number):
+    # Everyone the student could thank: the roster minus themselves. Once courses
+    # exist (#11) this would scope to their own section; for now it is everyone.
+    return sql.execute(
+        """select student_number, first_name, last_name from students
+            where student_number != ?
+            order by last_name, first_name""",
+        (student_number,)
+    ).fetchall()
+
+
+def add_endorsement(sql, from_student, to_student):
+    """Record a thank-you. True if it was new, False if already given today.
+
+    'insert or ignore' leans on the (from, to, day) primary key: a repeat tap of
+    the same classmate on the same day collides and is ignored, so the count
+    cannot be inflated. Self-thanks are refused here as a backstop even though the
+    form never offers the student their own name.
+    """
+    if from_student == to_student:
+        return False
+    sql.execute(
+        """insert or ignore into endorsements (from_student, to_student, day)
+           values (?, ?, date('now'))""",
+        (from_student, to_student)
+    )
+    return sql.rowcount > 0
+
+
+def endorsements_given_today(sql, from_student):
+    # The classmates this student has already thanked today, by name, so the page
+    # can show what registered and the student does not re-tap the same person.
+    return sql.execute(
+        """select s.first_name, s.last_name from endorsements e
+             join students s on e.to_student = s.student_number
+            where e.from_student = ? and e.day = date('now')
+            order by s.last_name, s.first_name""",
+        (from_student,)
+    ).fetchall()
+
+
+def endorsement_tallies(sql):
+    # Received counts per student, most-thanked first, for the staff view the
+    # instructor uses when deciding remarks. Students with zero are omitted.
+    return sql.execute(
+        """select s.first_name, s.last_name, count(*) as n from endorsements e
+             join students s on e.to_student = s.student_number
+            group by e.to_student
+            order by n desc, s.last_name, s.first_name"""
+    ).fetchall()

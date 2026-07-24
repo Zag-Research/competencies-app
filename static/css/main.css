@@ -299,6 +299,25 @@ h1 {
     border-color: #f1a208;
     color: #8a5a00;
 }
+/* "Can't evaluate": not a result, so it stays neutral grey and does not compete
+   with the two outcome buttons beside it. */
+.queue-defer {
+    border-color: #b9bec7;
+    color: #5f6571;
+}
+
+/* Peer shout-out: thank a classmate from a dropdown on your own progress page. */
+.endorse-select {
+    padding: 0.4rem 0.5rem;
+    margin-right: 0.5rem;
+    border: 1px solid #b9bec7;
+    border-radius: 4px;
+}
+.endorse-given {
+    margin-top: 0.6rem;
+    color: #5f6571;
+    font-size: 0.9rem;
+}
 
 /* Dev sign-in page */
 .login-form {

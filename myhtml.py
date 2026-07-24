@@ -103,6 +103,10 @@ class a(element):
 	pass
 class label(element):
 	pass
+class select(element):
+	pass
+class option(element):
+	pass
 class script(element):
 	pass
 

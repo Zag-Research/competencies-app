@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS endorsements;
 DROP TABLE IF EXISTS requests;
 DROP TABLE IF EXISTS achievements;
 DROP TABLE IF EXISTS students;
@@ -13,7 +14,11 @@ CREATE TABLE students (
 CREATE TABLE competencies (
     name TEXT,
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    description TEXT
+    description TEXT,
+    -- which course this competency belongs to, e.g. 'CPS109' or 'CPS213'. The
+    -- studio runs both at once, so every competency is tagged; per-course
+    -- filtering in the student view is a separate step (#11).
+    course TEXT
 );
 
 CREATE TABLE achievements (
@@ -45,6 +50,23 @@ CREATE TABLE requests (
     claimed_at TEXT,
     FOREIGN KEY (student_number) REFERENCES students(student_number),
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
+);
+
+-- peer helpfulness: one row = a student thanking a classmate who helped them.
+-- The instructor folds the received counts into that classmate's course remarks,
+-- one of the ways a student earns marks above the ~80% the competencies give.
+--
+-- The (from, to, day) primary key is the anti-gaming rule in the schema itself:
+-- an 'insert or ignore' can only land one thank-you per classmate per day, so a
+-- student cannot inflate someone by tapping repeatedly. A fresh day is a fresh
+-- row, because they may genuinely have helped again.
+CREATE TABLE endorsements (
+    from_student TEXT,
+    to_student TEXT,
+    day TEXT,
+    PRIMARY KEY (from_student, to_student, day),
+    FOREIGN KEY (from_student) REFERENCES students(student_number),
+    FOREIGN KEY (to_student) REFERENCES students(student_number)
 );
 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);

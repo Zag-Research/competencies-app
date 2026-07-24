@@ -41,21 +41,21 @@ def queue_student_view(student_number):
         seat = next((row[3] for row in pending if row[3]), None)
         being_evaluated = any(row[4] == 'claimed' for row in pending)
         all_competencies = sql.execute(
-            "select id, name from competencies order by id"
+            "select id, name, course from competencies order by id"
         ).fetchall()
         remaining_today = db.daily_cap() - db.requests_used_today(sql, student_number)
     available = []
-    for (cid, name) in all_competencies:
+    for (cid, name, course) in all_competencies:
         if cid in pending_ids:
             continue
         state = states.get(cid, 'unassessed')
         if state == 'unassessed':
-            available.append((cid, name))
+            available.append((cid, name, course))
         elif state == 'cooling_off':
             # A cooling-off competency reappears in the sign-up list only once its
             # two-day retry window has passed.
             if logic.retry_available(recorded_at.get(cid)):
-                available.append((cid, name))
+                available.append((cid, name, course))
     if pending:
         p += h2('In the queue')
         # Students sign up before they get to the lab, so a request starts with no
@@ -103,7 +103,12 @@ def queue_student_view(student_number):
         p += div(str(remaining_today) + ' of ' + str(db.daily_cap())
                  + ' requests left today.').classes('queue-allowance')
         f = form(method='post', action=url_for('queue.queue_join'))
-        for (cid, name) in available:
+        current_course = None
+        for (cid, name, course) in available:
+            # Sub-heading each time the available list crosses into another course.
+            if course != current_course:
+                f += div(course or 'Other').classes('queue-course')
+                current_course = course
             lbl = label().classes('queue-check')
             lbl += input(type='checkbox', name='competency_ids', value=str(cid))
             lbl += span(name)
@@ -338,6 +343,10 @@ def queue_evaluate_view(student_number, evaluator):
     if seat:
         subnav += span('seat ' + seat).classes('queue-card-seat')
     p += subnav
+    # One-shot notice, e.g. confirming a competency was handed back to the queue.
+    notice = session.pop('queue_notice', None)
+    if notice:
+        p += div(notice).classes('queue-notice')
     if undo_row:
         outcome = 'Achieved' if undo['state'] == 'achieved' else 'Not passed'
         banner = div().classes('queue-notice')
@@ -368,6 +377,15 @@ def queue_evaluate_view(student_number, evaluator):
             button('Not passed', type='submit').classes('roster-link', 'queue-no'),
             method='post',
             action=url_for('queue.queue_mark', request_id=rid, state='cooling_off')
+        )
+        # Third option, and NOT an outcome: the TA cannot assess this one today.
+        # It goes back on the list for another evaluator instead of being guessed
+        # at. Works both before starting (tap it the moment the screen opens) and
+        # partway through, which is why there is only one button for both.
+        actions += form(
+            button("Can't evaluate", type='submit').classes('roster-link', 'queue-defer'),
+            method='post',
+            action=url_for('queue.queue_decline', request_id=rid)
         )
         p += div(
             span(comp_name).classes('progress-name'),
@@ -518,6 +536,40 @@ def queue_release(student_number):
         db.release_student(sql, student_number, user)
     session['queue_notice'] = 'Student released back to the queue.'
     return redirect(url_for('queue.queue'))
+
+
+@queue_bp.route('/queue/decline/<int:request_id>', methods=['POST'])
+def queue_decline(request_id):
+    # "I can't evaluate this one." Hands a single competency back to the queue for
+    # another TA or the instructor, without failing the student and without
+    # disturbing the rest of what this TA claimed for them.
+    #
+    # A declined request is indistinguishable from one that was never claimed: it
+    # goes back to plain 'waiting'. That deliberately means it can find its way to
+    # this same TA again. Tracking who declined would need a column, a filter on
+    # the queue query, and an answer for "what if everyone declines it" that ends
+    # with the request invisible to the instructor who is meant to catch it.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    with db.cursor() as sql:
+        # Look up before releasing: afterwards the claim is gone and we could no
+        # longer prove this request was ours to decline.
+        req = sql.execute(
+            """select r.student_number, r.competency_id, c.name from requests r
+                 join competencies c on r.competency_id = c.id
+                where r.id = ? and r.status = 'claimed' and r.claimed_by = ?""",
+            (request_id, user)
+        ).fetchone()
+        if req is None:
+            # Not ours (stale claim, someone else took the student, already marked).
+            return redirect(url_for('queue.queue'))
+        student_number, competency_id, comp_name = req
+        db.release_request(sql, request_id, user)
+    session['queue_notice'] = (
+        comp_name + ' went back to the queue for another evaluator.'
+    )
+    return redirect(mark_return_url(student_number, competency_id))
 
 
 @queue_bp.route('/queue/competency/<int:competency_id>')
