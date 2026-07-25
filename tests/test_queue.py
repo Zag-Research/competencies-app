@@ -30,14 +30,18 @@ def db(tmp_path, monkeypatch):
     return db_module
 
 
-def add_request(student_number, competency_id, seat='12'):
+# A fixed studio day for the db-level tests (a real Tuesday session).
+STUDIO = '2026-07-28'
+
+
+def add_request(student_number, competency_id, seat='12', studio_date=STUDIO):
     """Put a student in the queue, the way queue_join does."""
     with db_module.cursor() as sql:
         sql.execute(
             """insert into requests
-                   (student_number, competency_id, seat, requested_at, status)
-               values (?, ?, ?, CURRENT_TIMESTAMP, 'waiting')""",
-            (student_number, competency_id, seat)
+                   (student_number, competency_id, seat, requested_at, status, studio_date)
+               values (?, ?, ?, CURRENT_TIMESTAMP, 'waiting', ?)""",
+            (student_number, competency_id, seat, studio_date)
         )
         return sql.lastrowid
 
@@ -55,13 +59,13 @@ def test_request_without_a_seat_cannot_be_claimed(db):
     """Signing up from home is a plan, not a person a TA can walk over to."""
     add_request('500111111', 1, seat=None)
     with db.cursor() as sql:
-        assert db.claim_student(sql, '500111111', 'dmason') is False
+        assert db.claim_student(sql, '500111111', 'dmason', STUDIO) is False
 
 
 def test_request_with_a_seat_can_be_claimed(db):
     add_request('500111111', 1, seat='12')
     with db.cursor() as sql:
-        assert db.claim_student(sql, '500111111', 'dmason') is True
+        assert db.claim_student(sql, '500111111', 'dmason', STUDIO) is True
 
 
 # --- claiming (#14) ------------------------------------------------------
@@ -70,8 +74,8 @@ def test_second_ta_loses_the_race(db):
     """The conditional UPDATE is what stops two TAs walking to the same seat."""
     add_request('500111111', 1)
     with db.cursor() as sql:
-        assert db.claim_student(sql, '500111111', 'dmason') is True
-        assert db.claim_student(sql, '500111111', 'lfortune') is False
+        assert db.claim_student(sql, '500111111', 'dmason', STUDIO) is True
+        assert db.claim_student(sql, '500111111', 'lfortune', STUDIO) is False
     assert request_row(1) == ('claimed', 'dmason')
 
 
@@ -80,7 +84,7 @@ def test_claiming_takes_the_whole_student(db):
     first = add_request('500111111', 1)
     second = add_request('500111111', 2)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
     assert request_row(first) == ('claimed', 'dmason')
     assert request_row(second) == ('claimed', 'dmason')
 
@@ -89,7 +93,7 @@ def test_release_student_returns_everything(db):
     first = add_request('500111111', 1)
     second = add_request('500111111', 2)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
         db.release_student(sql, '500111111', 'dmason')
     assert request_row(first) == ('waiting', None)
     assert request_row(second) == ('waiting', None)
@@ -99,7 +103,7 @@ def test_claim_group_takes_everyone_waiting_on_a_competency(db):
     add_request('500111111', 1)
     add_request('500222222', 1)
     with db.cursor() as sql:
-        won, lost = db.claim_competency_group(sql, 1, 'dmason')
+        won, lost = db.claim_competency_group(sql, 1, 'dmason', STUDIO)
     assert (won, lost) == (2, 0)
 
 
@@ -110,7 +114,7 @@ def test_decline_releases_only_that_competency(db):
     declined = add_request('500111111', 1)
     kept = add_request('500111111', 2)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
         assert db.release_request(sql, declined, 'dmason') is True
     assert request_row(declined) == ('waiting', None)
     assert request_row(kept) == ('claimed', 'dmason')
@@ -120,9 +124,9 @@ def test_declined_competency_is_claimable_by_another_ta(db):
     """Back to plain 'waiting' means someone else can genuinely pick it up."""
     declined = add_request('500111111', 1)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
         db.release_request(sql, declined, 'dmason')
-        assert db.claim_student(sql, '500111111', 'lfortune') is True
+        assert db.claim_student(sql, '500111111', 'lfortune', STUDIO) is True
     assert request_row(declined) == ('claimed', 'lfortune')
 
 
@@ -130,7 +134,7 @@ def test_decline_records_no_result(db):
     """Declining is not a fail: nothing lands in achievements, so no cooling-off."""
     declined = add_request('500111111', 1)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
         db.release_request(sql, declined, 'dmason')
         rows = sql.execute('select count(*) from achievements').fetchone()
     assert rows[0] == 0
@@ -140,10 +144,10 @@ def test_decline_does_not_spend_a_daily_request(db):
     """The row already existed, so going back on the list costs the student nothing."""
     declined = add_request('500111111', 1)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
-        before = db.requests_used_today(sql, '500111111')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        before = db.requests_used_for_studio(sql, '500111111', STUDIO)
         db.release_request(sql, declined, 'dmason')
-        after = db.requests_used_today(sql, '500111111')
+        after = db.requests_used_for_studio(sql, '500111111', STUDIO)
     assert before == after == 1
 
 
@@ -151,7 +155,7 @@ def test_cannot_decline_another_tas_claim(db):
     """A TA must not be able to bounce a request out from under someone else."""
     held = add_request('500111111', 1)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
         assert db.release_request(sql, held, 'lfortune') is False
     assert request_row(held) == ('claimed', 'dmason')
 
@@ -180,7 +184,7 @@ def staff(db):
 def test_evaluation_screen_offers_all_three_actions(db, staff):
     add_request('500111111', 1)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
     body = staff.get('/queue/student/500111111').get_data(as_text=True)
     assert 'Achieved' in body
     assert 'Not passed' in body
@@ -193,7 +197,7 @@ def test_decline_endpoint_puts_it_back_and_returns_to_the_student(db, staff):
     declined = add_request('500111111', 1)
     kept = add_request('500111111', 2)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
     response = staff.post('/queue/decline/' + str(declined))
     assert response.status_code == 302
     # Straight back to the student, so the TA carries on with what is left.
@@ -207,7 +211,7 @@ def test_decline_endpoint_rejects_a_student(db):
     import app as app_module
     declined = add_request('500111111', 1)
     with db.cursor() as sql:
-        db.claim_student(sql, '500111111', 'dmason')
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
     client = app_module.app.test_client()
     with client.session_transaction() as s:
         s['user'] = '500111111'

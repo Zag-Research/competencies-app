@@ -85,10 +85,10 @@ def test_evaluation_screen_shows_the_competency_scope(seeded):
         # Competency 41 is CPS213 "Understands different numbering systems".
         sql.execute(
             """insert into requests
-                   (student_number, competency_id, seat, requested_at, status)
-               values ('500111111', 41, '12', CURRENT_TIMESTAMP, 'waiting')"""
+                   (student_number, competency_id, seat, requested_at, status, studio_date)
+               values ('500111111', 41, '12', CURRENT_TIMESTAMP, 'waiting', '2026-07-28')"""
         )
-        seeded.claim_student(sql, '500111111', 'dmason')
+        seeded.claim_student(sql, '500111111', 'dmason', '2026-07-28')
     body = signed_in_as('dmason', 'staff').get(
         '/queue/student/500111111').get_data(as_text=True)
     assert 'Understands different numbering systems' in body

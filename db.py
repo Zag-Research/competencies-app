@@ -91,22 +91,30 @@ def claim_cutoff():
 #
 # Used both to list the queue and to guard the claim itself, so the two can never
 # disagree about who is available.
-AVAILABLE = """(seat is not null and seat != ''
+#
+# Scoped to one studio day: a student who booked next Tuesday is not standing in
+# front of anyone today, so they must not appear in (or be claimable from) today's
+# queue. Callers pass the studio date they are working on.
+AVAILABLE = """(studio_date = ?
+                and seat is not null and seat != ''
                 and (status = 'waiting'
                      or (status = 'claimed' and claimed_at < datetime('now', ?))))"""
 
 
-def set_seat(sql, student_number, seat):
-    # The student arrived and sat down (or moved machines). One seat per student, so
-    # this covers every request they have open today.
+def set_seat(sql, student_number, seat, studio_date):
+    # The student arrived and sat down (or moved machines). One seat per student per
+    # studio day: scoped to this session so sitting down today does not stamp a seat
+    # onto a request they booked for next week, which would make them look present
+    # at a session they have not turned up to yet.
     sql.execute(
         """update requests set seat = ?
-            where student_number = ? and status in ('waiting', 'claimed')""",
-        (seat, student_number)
+            where student_number = ? and studio_date = ?
+              and status in ('waiting', 'claimed')""",
+        (seat, student_number, studio_date)
     )
 
 
-def claim_student(sql, student_number, evaluator):
+def claim_student(sql, student_number, evaluator, studio_date):
     """Try to claim every available request for one student. True if we got them.
 
     Two TAs can tap the same student at the same moment. The guard against both
@@ -126,12 +134,12 @@ def claim_student(sql, student_number, evaluator):
               set status = 'claimed', claimed_by = ?, claimed_at = CURRENT_TIMESTAMP
             where student_number = ?
               and """ + AVAILABLE,
-        (evaluator, student_number, claim_cutoff())
+        (evaluator, student_number, studio_date, claim_cutoff())
     )
     return sql.rowcount > 0
 
 
-def claim_competency_group(sql, competency_id, evaluator):
+def claim_competency_group(sql, competency_id, evaluator, studio_date):
     """Claim every student with an available request for one competency.
 
     Returns (won, lost): how many students we got, and how many another TA had
@@ -146,11 +154,11 @@ def claim_competency_group(sql, competency_id, evaluator):
     students = sql.execute(
         "select distinct student_number from requests"
         " where competency_id = ? and " + AVAILABLE,
-        (competency_id, claim_cutoff())
+        (competency_id, studio_date, claim_cutoff())
     ).fetchall()
     won = 0
     for (student_number,) in students:
-        if claim_student(sql, student_number, evaluator):
+        if claim_student(sql, student_number, evaluator, studio_date):
             won += 1
     return won, len(students) - won
 
@@ -202,14 +210,16 @@ def release_request(sql, request_id, evaluator):
     return sql.rowcount > 0
 
 
-def requests_used_today(sql, student_number):
-    # Count every request the student made today (waiting or already handled):
-    # the cap is about slots claimed per day, not just what is still pending.
-    # Takes an open cursor so it can run inside a caller's transaction.
+def requests_used_for_studio(sql, student_number, studio_date):
+    # How much of the cap the student has spent on one studio session (waiting or
+    # already handled): the cap is about slots booked per session, not just what is
+    # still pending. Counting by studio_date rather than by the day they pressed the
+    # button is what lets them plan a week ahead without exhausting a single day's
+    # allowance. Takes an open cursor so it can run inside a caller's transaction.
     row = sql.execute(
         """select count(*) from requests
-           where student_number = ? and date(requested_at) = date('now')""",
-        (student_number,)
+           where student_number = ? and studio_date = ?""",
+        (student_number, studio_date)
     ).fetchone()
     return row[0] if row else 0
 

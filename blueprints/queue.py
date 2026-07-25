@@ -17,6 +17,8 @@ def queue_student_view(student_number):
     notice = session.pop('queue_notice', None)
     if notice:
         p += div(notice).classes('queue-notice')
+    today = logic.today_toronto().isoformat()
+    studios = logic.upcoming_studios()
     with db.cursor() as sql:
         states = {}
         recorded_at = {}
@@ -30,20 +32,29 @@ def queue_student_view(student_number):
         # own queue page go blank. They still have those requests open, and someone
         # is on the way.
         pending = sql.execute(
-            """select r.id, r.competency_id, c.name, r.seat, r.status from requests r
+            """select r.id, r.competency_id, c.name, r.seat, r.status, r.studio_date
+               from requests r
                join competencies c on r.competency_id = c.id
                where r.student_number = ? and r.status in ('waiting', 'claimed')
-               order by r.requested_at""",
+               order by r.studio_date, r.requested_at""",
             (student_number,)
         ).fetchall()
         pending_ids = {row[1] for row in pending}
-        # One seat per student: whatever their open requests say they are sitting at.
-        seat = next((row[3] for row in pending if row[3]), None)
-        being_evaluated = any(row[4] == 'claimed' for row in pending)
         all_competencies = sql.execute(
             "select id, name, course from competencies order by id"
         ).fetchall()
-        remaining_today = db.daily_cap() - db.requests_used_today(sql, student_number)
+        # Allowance is per studio session, so a student can plan a week ahead
+        # without spending one day's worth of slots.
+        remaining = {
+            day: db.daily_cap() - db.requests_used_for_studio(sql, student_number, day)
+            for day in studios
+        }
+    # Seat and "a TA is coming" describe the session happening right now, so they
+    # only ever read from today's requests. A booking for next Tuesday must not
+    # make the student look seated and waiting today.
+    seat = next((row[3] for row in pending if row[3] and row[5] == today), None)
+    being_evaluated = any(row[4] == 'claimed' and row[5] == today for row in pending)
+    has_today = any(row[5] == today for row in pending)
     available = []
     for (cid, name, course) in all_competencies:
         if cid in pending_ids:
@@ -58,26 +69,38 @@ def queue_student_view(student_number):
                 available.append((cid, name, course))
     if pending:
         p += h2('In the queue')
-        # Students sign up before they get to the lab, so a request starts with no
-        # seat. Until they enter one, staff cannot see them: there is nowhere to
-        # walk to. Entering a seat is what puts them in front of a TA.
-        if being_evaluated:
-            p += div('A TA is on their way to you.').classes('queue-seat-set')
-        elif seat:
-            p += div(
-                span('You are at seat ' + seat + '. A TA will come to you.'),
-            ).classes('queue-seat-set')
-        else:
-            p += div('You are signed up. Enter your seat number when you get to '
-                     'the lab, so a TA can find you. You will not appear in the '
-                     'staff queue until you do.').classes('queue-notice')
-        f = form(method='post', action=url_for('queue.queue_seat'))
-        f += span('Seat number' if not seat else 'Moved machines?')
-        f += input(type='text', name='seat', value=seat or '', placeholder='e.g. 12')
-        f += button('I am here' if not seat else 'Update seat',
-                    type='submit').classes('roster-link')
-        p += div(f).classes('queue-seat')
-        for (rid, _cid, name, _seat, status) in pending:
+        # The seat only means anything for the session running today, so the whole
+        # seat block is skipped when everything booked is for a future session.
+        if has_today:
+            # Students sign up before they get to the lab, so a request starts with
+            # no seat. Until they enter one, staff cannot see them: there is nowhere
+            # to walk to. Entering a seat is what puts them in front of a TA.
+            if being_evaluated:
+                p += div('A TA is on their way to you.').classes('queue-seat-set')
+            elif seat:
+                p += div(
+                    span('You are at seat ' + seat + '. A TA will come to you.'),
+                ).classes('queue-seat-set')
+            else:
+                p += div('You are signed up for today. Enter your seat number when '
+                         'you get to the lab, so a TA can find you. You will not '
+                         'appear in the staff queue until you do.').classes('queue-notice')
+            f = form(method='post', action=url_for('queue.queue_seat'))
+            f += span('Seat number' if not seat else 'Moved machines?')
+            f += input(type='text', name='seat', value=seat or '', placeholder='e.g. 12')
+            f += button('I am here' if not seat else 'Update seat',
+                        type='submit').classes('roster-link')
+            p += div(f).classes('queue-seat')
+        current_day = None
+        for (rid, _cid, name, _seat, status, studio_date) in pending:
+            # A heading per session, so a student can see what they booked for
+            # today versus what is waiting for them next Tuesday.
+            if studio_date != current_day:
+                current_day = studio_date
+                heading = logic.studio_label(studio_date)
+                if studio_date == today:
+                    heading += ' (today)'
+                p += div(heading).classes('queue-course')
             row = div(span(name).classes('progress-name')).classes('queue-row')
             if status == 'claimed':
                 # A TA is already standing up to come over. Cancelling now would
@@ -91,18 +114,36 @@ def queue_student_view(student_number):
                 )
             p += row
         if seat:
-            # Leaving clears the seat, which drops them out of the staff queue
+            # Leaving clears today's seat, which drops them out of the staff queue
             # without cancelling what they signed up for.
             p += form(
                 button('I have left the lab', type='submit').classes('roster-link'),
                 method='post',
                 action=url_for('queue.queue_seat')
             ).classes('queue-release')
-    if available and remaining_today > 0:
+    bookable = [day for day in studios if remaining[day] > 0]
+    if available and bookable:
         p += h2('Sign up')
-        p += div(str(remaining_today) + ' of ' + str(db.daily_cap())
-                 + ' requests left today.').classes('queue-allowance')
+        p += div('Up to ' + str(db.daily_cap()) + ' competencies per studio '
+                 'session. Pick the session you want to be evaluated in: you can '
+                 'book ahead, not just for today.').classes('queue-allowance')
         f = form(method='post', action=url_for('queue.queue_join'))
+        # Which session these competencies are for. Only sessions with room left
+        # are offered, so a student cannot book into a full day and be silently
+        # trimmed. Defaults to the soonest session with space.
+        picker = div(span('Studio session ')).classes('queue-seat')
+        sel = select(name='studio_date').classes('endorse-select')
+        for day in bookable:
+            text = logic.studio_label(day)
+            if day == today:
+                text += ' (today)'
+            text += ' - ' + str(remaining[day]) + ' of ' + str(db.daily_cap()) + ' left'
+            o = option(text, value=day)
+            if day == bookable[0]:
+                o.addAttributes(selected=True)
+            sel += o
+        picker += sel
+        f += picker
         current_course = None
         for (cid, name, course) in available:
             # Sub-heading each time the available list crosses into another course.
@@ -115,53 +156,110 @@ def queue_student_view(student_number):
             f += lbl
         f += button('Join queue', type='submit').classes('roster-link')
         p += f
-    elif available and remaining_today <= 0:
-        p += div('You have used all ' + str(db.daily_cap())
-                 + ' of today\'s requests.').classes('queue-empty')
+    elif available and not bookable:
+        p += div('Every upcoming studio session is full for you (' + str(db.daily_cap())
+                 + ' competencies each). Come back after your next session.'
+                 ).classes('queue-empty')
     elif not pending:
         p += div('Nothing to sign up for right now.').classes('queue-empty')
     return str(p)
 
 
-def queue_staff_view(group_by='student'):
+def queue_staff_view(group_by='student', day=None):
+    today = logic.today_toronto().isoformat()
+    studios = logic.upcoming_studios()
+    # The session being worked. Defaults to the soonest (today when it runs); a
+    # TA can switch to a future one to plan, but only real studio days are valid.
+    if day not in studios:
+        day = studios[0]
     p = page()
     p += page_header()
     p += h1('Evaluation queue')
     nav = div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
     # Same requests, two groupings: work through one student at a time, or work
-    # through everyone who wants the same competency.
+    # through everyone who wants the same competency. Links carry the session so
+    # switching grouping keeps the day.
     for (key, text) in (('student', 'By student'), ('competency', 'By competency')):
-        link = a(text, href=url_for('queue.queue', group=key)).classes('queue-toggle')
+        link = a(text, href=url_for('queue.queue', group=key, day=day)).classes('queue-toggle')
         if key == group_by:
             link.addClasses('is-active')
         nav += link
     p += nav
+    # Which studio session's queue to show. Today by default; the other links let a
+    # TA look ahead at what students have booked.
+    dayrow = div(span('Session ')).classes('subnav')
+    for d in studios:
+        text = logic.studio_label(d) + (' (today)' if d == today else '')
+        link = a(text, href=url_for('queue.queue', group=group_by, day=d)).classes('queue-toggle')
+        if d == day:
+            link.addClasses('is-active')
+        dayrow += link
+    p += dayrow
     # One-shot notice, e.g. losing a race to claim a student, or releasing one.
     notice = session.pop('queue_notice', None)
     if notice:
         p += div(notice).classes('queue-notice')
+    # Today is the live, claimable queue: seat-gated, because a claim means walking
+    # over to someone who is here. A future session is a read-only planning roster:
+    # those students have booked but are not in the lab, so it shows everything
+    # they signed up for, seat or not, and nothing is claimable yet.
+    planning = day != today
     with db.cursor() as sql:
-        rows = sql.execute(
-            """select r.student_number, s.first_name, s.last_name,
-                      r.competency_id, c.name, r.seat
-                 from requests r
-                 join students s on r.student_number = s.student_number
-                 join competencies c on r.competency_id = c.id
-                where """ + db.AVAILABLE + """
-                order by r.requested_at""",
-            (db.claim_cutoff(),)
-        ).fetchall()
+        if planning:
+            p += div('Planning view: these students have booked '
+                     + logic.studio_label(day) + '. You can see what is coming, '
+                     'but claiming opens on the day.').classes('queue-notice')
+            rows = sql.execute(
+                """select r.student_number, s.first_name, s.last_name,
+                          r.competency_id, c.name, r.seat
+                     from requests r
+                     join students s on r.student_number = s.student_number
+                     join competencies c on r.competency_id = c.id
+                    where r.studio_date = ? and r.status = 'waiting'
+                    order by r.requested_at""",
+                (day,)
+            ).fetchall()
+        else:
+            rows = sql.execute(
+                """select r.student_number, s.first_name, s.last_name,
+                          r.competency_id, c.name, r.seat
+                     from requests r
+                     join students s on r.student_number = s.student_number
+                     join competencies c on r.competency_id = c.id
+                    where """ + db.AVAILABLE + """
+                    order by r.requested_at""",
+                (day, db.claim_cutoff())
+            ).fetchall()
     if not rows:
-        p += div('Queue is empty.').classes('queue-empty')
+        empty = 'Queue is empty.' if not planning else 'Nobody has booked this session yet.'
+        p += div(empty).classes('queue-empty')
         return str(p)
     if group_by == 'competency':
-        p += queue_by_competency(rows)
+        p += queue_by_competency(rows, day, claimable=not planning)
     else:
-        p += queue_by_student(rows)
+        p += queue_by_student(rows, day, claimable=not planning)
     return str(p)
 
 
-def queue_by_student(rows):
+def seat_label(seat):
+    # Booked-ahead requests have no seat yet, so the planning view can be handed a
+    # None. Show where to walk when we know, and "booked" when we do not.
+    return 'seat ' + seat if seat else 'booked'
+
+
+def queue_card(claimable, action, head, body_rows):
+    # One queue card. On the live queue it is a claim button (tapping it claims the
+    # whole card and opens the evaluation screen). In the planning view it is a
+    # plain, non-interactive card: those students are not here to be claimed yet.
+    inner = div(head, *body_rows)
+    if claimable:
+        b = button(type='submit').classes('queue-card', 'queue-claim')
+        b += inner
+        return form(b, method='post', action=action)
+    return div(inner).classes('queue-card')
+
+
+def queue_by_student(rows, day, claimable=True):
     # Group the flat rows by student so each student shows once, with all their
     # requested competencies listed under them. Insertion order (Python dict)
     # preserves the requested_at ordering from the query, so the student who has
@@ -173,24 +271,20 @@ def queue_by_student(rows):
         students[number]['items'].append(comp_name)
     out = div()
     for (number, group) in students.items():
-        # The whole card is one button: claiming the student and opening their
-        # evaluation screen is a single action, so no TA can walk over to a student
-        # without first taking them out of everyone else's queue.
-        card = form(method='post',
-                    action=url_for('queue.queue_claim', student_number=number))
-        b = button(type='submit').classes('queue-card', 'queue-claim')
-        b += div(
+        head = div(
             span(group['name']).classes('queue-card-name'),
-            span('seat ' + group['seat']).classes('queue-card-seat'),
+            span(seat_label(group['seat'])).classes('queue-card-seat'),
         ).classes('queue-card-head')
-        for comp_name in group['items']:
-            b += div(span(comp_name).classes('progress-name')).classes('queue-row')
-        card += b
-        out += card
+        body_rows = [div(span(name).classes('progress-name')).classes('queue-row')
+                     for name in group['items']]
+        out += queue_card(
+            claimable,
+            url_for('queue.queue_claim', student_number=number, day=day),
+            head, body_rows)
     return out
 
 
-def queue_by_competency(rows):
+def queue_by_competency(rows, day, claimable=True):
     # Same rows, grouped the other way: one card per competency, listing everyone
     # waiting on it, so a TA can evaluate the whole cohort in one pass instead of
     # repeating the same evaluation student by student.
@@ -201,22 +295,21 @@ def queue_by_competency(rows):
         comps[cid]['students'].append((last + ', ' + first, seat))
     out = div()
     for (cid, group) in comps.items():
-        card = form(method='post',
-                    action=url_for('queue.queue_claim_group', competency_id=cid))
-        b = button(type='submit').classes('queue-card', 'queue-claim')
         count = len(group['students'])
-        b += div(
+        head = div(
             span(group['name']).classes('queue-card-name'),
             span(str(count) + (' student' if count == 1 else ' students')
                  ).classes('queue-card-seat'),
         ).classes('queue-card-head')
-        for (name, seat) in group['students']:
-            b += div(
-                span(name).classes('progress-name'),
-                span('seat ' + seat).classes('queue-card-seat'),
-            ).classes('queue-row')
-        card += b
-        out += card
+        body_rows = [
+            div(span(name).classes('progress-name'),
+                span(seat_label(seat)).classes('queue-card-seat')).classes('queue-row')
+            for (name, seat) in group['students']
+        ]
+        out += queue_card(
+            claimable,
+            url_for('queue.queue_claim_group', competency_id=cid, day=day),
+            head, body_rows)
     return out
 
 
@@ -434,7 +527,8 @@ def queue():
         return queue_student_view(user)
     if role == 'staff':
         group = request.args.get('group')
-        return queue_staff_view('competency' if group == 'competency' else 'student')
+        return queue_staff_view('competency' if group == 'competency' else 'student',
+                                request.args.get('day'))
     return redirect(url_for('auth.login'))
 
 
@@ -444,37 +538,45 @@ def queue_join():
     if user is None or role != 'student':
         return redirect(url_for('auth.login'))
     competency_ids = request.form.getlist('competency_ids')
+    # Which session this sign-up is for. Guard it against a hand-crafted POST: only
+    # a real upcoming studio day is allowed, otherwise fall back to the next one.
+    studio_date = request.form.get('studio_date', '')
+    if studio_date not in logic.upcoming_studios():
+        studio_date = logic.next_studio()
+    today = logic.today_toronto().isoformat()
     if competency_ids:
         with db.cursor() as sql:
-            # No seat yet: students sign up before they reach the lab. They enter a
-            # seat once they are sitting down (queue_seat), and that is what makes
-            # them visible to staff.
-            #
-            # If they are already seated, carry that seat onto the new requests so
-            # they do not have to say where they are twice.
-            row = sql.execute(
-                """select seat from requests
-                    where student_number = ? and seat is not null and seat != ''
-                      and status in ('waiting', 'claimed')
-                    limit 1""",
-                (user,)
-            ).fetchone()
-            seat = row[0] if row else None
-            # Enforce the daily cap: only insert up to the student's remaining
-            # allowance, dropping any extras they selected past the limit.
-            remaining = db.daily_cap() - db.requests_used_today(sql, user)
+            # A seat only means "I am here now", so only a booking for today can
+            # inherit today's seat. A future booking starts seatless: the student
+            # enters a seat when they actually arrive for that session.
+            seat = None
+            if studio_date == today:
+                row = sql.execute(
+                    """select seat from requests
+                        where student_number = ? and studio_date = ?
+                          and seat is not null and seat != ''
+                          and status in ('waiting', 'claimed')
+                        limit 1""",
+                    (user, today)
+                ).fetchone()
+                seat = row[0] if row else None
+            # Enforce the per-session cap: only insert up to what is left for that
+            # session, dropping any extras selected past the limit.
+            remaining = db.daily_cap() - db.requests_used_for_studio(sql, user, studio_date)
             to_add = competency_ids[:remaining] if remaining > 0 else []
             for cid in to_add:
                 sql.execute(
-                    """insert into requests (student_number, competency_id, seat, requested_at, status)
-                       values (?, ?, ?, CURRENT_TIMESTAMP, 'waiting')""",
-                    (user, cid, seat)
+                    """insert into requests
+                           (student_number, competency_id, seat, requested_at, status, studio_date)
+                       values (?, ?, ?, CURRENT_TIMESTAMP, 'waiting', ?)""",
+                    (user, cid, seat, studio_date)
                 )
         skipped = len(competency_ids) - len(to_add)
         if skipped > 0:
             session['queue_notice'] = (
-                'Daily limit is ' + str(db.daily_cap()) + ' competencies. '
-                + str(skipped) + ' of your selections were not added.'
+                'Limit is ' + str(db.daily_cap()) + ' competencies per session. '
+                + str(skipped) + ' of your selections were not added to '
+                + logic.studio_label(studio_date) + '.'
             )
     return redirect(url_for('queue.queue'))
 
@@ -487,8 +589,11 @@ def queue_seat():
     if user is None or role != 'student':
         return redirect(url_for('auth.login'))
     seat = request.form.get('seat', '').strip()
+    # A seat is only ever about the session running today: it means "I am here, at
+    # this machine, right now." Booked-ahead requests for other days are untouched.
+    today = logic.today_toronto().isoformat()
     with db.cursor() as sql:
-        db.set_seat(sql, user, seat or None)
+        db.set_seat(sql, user, seat or None, today)
     if seat:
         session['queue_notice'] = 'Seat ' + seat + ' saved. A TA will come to you.'
     else:
@@ -541,13 +646,18 @@ def queue_claim(student_number):
     user, role = current_user()
     if user is None or role != 'staff':
         return redirect(url_for('auth.login'))
+    # The session whose queue this claim came from, so it only takes requests
+    # booked for that day. Guarded against a bad value, defaulting to the soonest.
+    day = request.args.get('day')
+    if day not in logic.upcoming_studios():
+        day = logic.next_studio()
     with db.cursor() as sql:
-        won = db.claim_student(sql, student_number, user)
+        won = db.claim_student(sql, student_number, user, day)
     if not won:
         # Another TA claimed this student between our page rendering and our tap.
         # Nothing was changed; send us back to a queue that no longer lists them.
         session['queue_notice'] = 'Another TA just claimed that student.'
-        return redirect(url_for('queue.queue'))
+        return redirect(url_for('queue.queue', day=day))
     return redirect(url_for('queue.queue_evaluate', student_number=student_number))
 
 
@@ -610,11 +720,15 @@ def queue_claim_group(competency_id):
     user, role = current_user()
     if user is None or role != 'staff':
         return redirect(url_for('auth.login'))
+    # Batch-claim is scoped to one session, same as the single claim above.
+    day = request.args.get('day')
+    if day not in logic.upcoming_studios():
+        day = logic.next_studio()
     with db.cursor() as sql:
-        won, lost = db.claim_competency_group(sql, competency_id, user)
+        won, lost = db.claim_competency_group(sql, competency_id, user, day)
     if won == 0:
         session['queue_notice'] = 'Another TA just claimed those students.'
-        return redirect(url_for('queue.queue', group='competency'))
+        return redirect(url_for('queue.queue', group='competency', day=day))
     if lost > 0:
         # A partial win. Say so rather than quietly showing a short cohort, or the
         # TA thinks students went missing.

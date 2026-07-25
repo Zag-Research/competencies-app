@@ -48,6 +48,10 @@ CREATE TABLE requests (
     status TEXT,
     claimed_by TEXT,
     claimed_at TEXT,
+    -- which studio session this request is for, as an ISO date (#17). Students
+    -- sign up ahead, so this is not always the day they pressed the button:
+    -- requested_at is when they asked, studio_date is when they want it.
+    studio_date TEXT,
     FOREIGN KEY (student_number) REFERENCES students(student_number),
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
 );
