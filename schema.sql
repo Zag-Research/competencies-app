@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS endorsements;
 DROP TABLE IF EXISTS requests;
 DROP TABLE IF EXISTS achievements;
@@ -71,6 +72,21 @@ CREATE TABLE endorsements (
     PRIMARY KEY (from_student, to_student, day),
     FOREIGN KEY (from_student) REFERENCES students(student_number),
     FOREIGN KEY (to_student) REFERENCES students(student_number)
+);
+
+-- attendance: one row = a student was present for one studio session (#attendance).
+-- Deliberately separate from requests/seat: a student counts as present if they
+-- showed up, whether or not they demonstrated a competency or ever took a seat.
+-- The instructor's rule is a penalty for missing more than half the sessions, so
+-- what matters is the raw "was here" signal, self-reported to save TA roll-call time.
+--
+-- (student, day) primary key: checking in twice the same session is a no-op, the
+-- same insert-or-ignore trick used for endorsements.
+CREATE TABLE attendance (
+    student_number TEXT,
+    day TEXT,
+    PRIMARY KEY (student_number, day),
+    FOREIGN KEY (student_number) REFERENCES students(student_number)
 );
 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);

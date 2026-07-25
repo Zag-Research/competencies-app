@@ -326,6 +326,15 @@ ul.competency-scope li {
     margin-bottom: 0.1rem;
 }
 
+/* Attendance self check-in on the student queue page. */
+.queue-checkin {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
 /* Peer shout-out: thank a classmate from a dropdown on your own progress page. */
 .endorse-select {
     padding: 0.4rem 0.5rem;

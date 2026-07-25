@@ -267,6 +267,47 @@ def endorsements_given_today(sql, from_student):
     ).fetchall()
 
 
+def mark_present(sql, student_number, day):
+    # Record that a student showed up for one studio session. Idempotent: the
+    # (student, day) primary key means a second check-in the same day is ignored,
+    # so tapping "I'm here" again, or entering a seat after checking in, is safe.
+    sql.execute(
+        "insert or ignore into attendance (student_number, day) values (?, ?)",
+        (student_number, day)
+    )
+
+
+def is_present(sql, student_number, day):
+    # Whether this student has already checked in for the given session.
+    return sql.execute(
+        "select 1 from attendance where student_number = ? and day = ?",
+        (student_number, day)
+    ).fetchone() is not None
+
+
+def attendance_for_day(sql, day):
+    # Everyone who checked in for one session, for the staff roster of a session.
+    return sql.execute(
+        """select s.first_name, s.last_name from attendance a
+             join students s on a.student_number = s.student_number
+            where a.day = ?
+            order by s.last_name, s.first_name""",
+        (day,)
+    ).fetchall()
+
+
+def attendance_counts(sql):
+    # Sessions attended per student, most first: the raw signal the instructor
+    # folds into the miss-more-than-half rule. The "X of Y" percentage waits on a
+    # real term calendar (there is no session count without term start/end dates).
+    return sql.execute(
+        """select s.first_name, s.last_name, count(*) as n from attendance a
+             join students s on a.student_number = s.student_number
+            group by a.student_number
+            order by n desc, s.last_name, s.first_name"""
+    ).fetchall()
+
+
 def endorsement_tallies(sql):
     # Received counts per student, most-thanked first, for the staff view the
     # instructor uses when deciding remarks. Students with zero are omitted.

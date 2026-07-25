@@ -20,6 +20,7 @@ def index():
     p += h1('Students')
     p += div(
         a('Queue →', href=url_for('queue.queue')),
+        a('Attendance →', href=url_for('main.attendance')),
         a('Shout-outs →', href=url_for('main.endorsements')),
     ).classes('subnav')
     with db.cursor() as sql:
@@ -133,6 +134,49 @@ def endorse():
         else 'You already thanked ' + name + ' today.'
     )
     return redirect(url_for('main.view_student', student_number=user))
+
+
+@main_bp.route('/attendance')
+def attendance():
+    # Staff-only. Two things: how many sessions each student has attended (the raw
+    # signal for the miss-more-than-half rule), and who was present on a given day.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    day = request.args.get('day')
+    if not logic.is_studio_day(day or ''):
+        day = logic.today_toronto().isoformat()
+    p = page()
+    p += page_header()
+    p += h1('Attendance')
+    p += div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
+    p += div('Sessions attended per student. The attended-vs-total percentage '
+             'arrives with the term calendar at deployment; for now this is the '
+             'raw count.').classes('subnav')
+    with db.cursor() as sql:
+        counts = db.attendance_counts(sql)
+        roster = db.attendance_for_day(sql, day)
+    p += h2('Sessions attended')
+    if not counts:
+        p += div('No check-ins yet.').classes('queue-empty')
+    else:
+        for (fn, ln, n) in counts:
+            p += div(
+                span(ln + ', ' + fn).classes('progress-name'),
+                span(str(n) + (' session' if n == 1 else ' sessions')
+                     ).classes('progress-badge'),
+            ).classes('progress-row')
+    # Who was present on one specific session.
+    heading = logic.studio_label(day)
+    if day == logic.today_toronto().isoformat():
+        heading += ' (today)'
+    p += h2('Present on ' + heading)
+    if not roster:
+        p += div('Nobody checked in for this session.').classes('queue-empty')
+    else:
+        for (fn, ln) in roster:
+            p += div(span(ln + ', ' + fn).classes('progress-name')).classes('progress-row')
+    return str(p)
 
 
 @main_bp.route('/endorsements')

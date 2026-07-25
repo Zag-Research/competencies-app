@@ -49,6 +49,20 @@ def queue_student_view(student_number):
             day: db.daily_cap() - db.requests_used_for_studio(sql, student_number, day)
             for day in studios
         }
+        present_today = db.is_present(sql, student_number, today)
+    # Attendance is its own thing, shown only on a day the studio actually runs.
+    # It stands apart from signing up or taking a seat: a student who just comes to
+    # work still checks in, so "was here" is captured for everyone, not only those
+    # who demo a competency.
+    if logic.is_studio_day(today):
+        if present_today:
+            p += div('You are checked in for today. See you next session.'
+                     ).classes('queue-seat-set')
+        else:
+            check = form(method='post', action=url_for('queue.queue_checkin'))
+            check += span('Here for today\'s session? ')
+            check += button("I'm here today", type='submit').classes('roster-link')
+            p += div(check).classes('queue-checkin')
     # Seat and "a TA is coming" describe the session happening right now, so they
     # only ever read from today's requests. A booking for next Tuesday must not
     # make the student look seated and waiting today.
@@ -86,8 +100,11 @@ def queue_student_view(student_number):
                          'you get to the lab, so a TA can find you. You will not '
                          'appear in the staff queue until you do.').classes('queue-notice')
             f = form(method='post', action=url_for('queue.queue_seat'))
-            f += span('Seat number' if not seat else 'Moved machines?')
-            f += input(type='text', name='seat', value=seat or '', placeholder='e.g. 12')
+            f += span('Where are you sitting?' if not seat else 'Moved spots?')
+            # Free text, not just a machine number: students may bring their own
+            # laptop and sit anywhere, so a location like "back-left table" is fine.
+            f += input(type='text', name='seat', value=seat or '',
+                       placeholder='e.g. 12 or "back-left table"')
             f += button('I am here' if not seat else 'Update seat',
                         type='submit').classes('roster-link')
             p += div(f).classes('queue-seat')
@@ -594,11 +611,32 @@ def queue_seat():
     today = logic.today_toronto().isoformat()
     with db.cursor() as sql:
         db.set_seat(sql, user, seat or None, today)
+        # Taking a seat is a stronger "I am here" than the check-in button, so it
+        # marks attendance too. Leaving (empty seat) does not un-attend: they were
+        # still here today.
+        if seat:
+            db.mark_present(sql, user, today)
     if seat:
         session['queue_notice'] = 'Seat ' + seat + ' saved. A TA will come to you.'
     else:
         session['queue_notice'] = ('Marked as away. You are still signed up, but '
                                    'staff will not see you until you enter a seat.')
+    return redirect(url_for('queue.queue'))
+
+
+@queue_bp.route('/queue/checkin', methods=['POST'])
+def queue_checkin():
+    # "I'm here today." Records attendance for today's session, independent of
+    # whether the student signs up for or demonstrates anything. Only counts on a
+    # real studio day, so a stray tap on a weekend records nothing.
+    user, role = current_user()
+    if user is None or role != 'student':
+        return redirect(url_for('auth.login'))
+    today = logic.today_toronto().isoformat()
+    if logic.is_studio_day(today):
+        with db.cursor() as sql:
+            db.mark_present(sql, user, today)
+        session['queue_notice'] = 'Checked in for today. Thanks for coming.'
     return redirect(url_for('queue.queue'))
 
 
