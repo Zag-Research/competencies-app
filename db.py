@@ -267,6 +267,35 @@ def endorsements_given_today(sql, from_student):
     ).fetchall()
 
 
+def enrolled_courses(sql, student_number):
+    # Courses the student is taking. Empty means "not recorded", which callers
+    # treat as enrolled in everything rather than nothing (see competencies_for).
+    return [row[0] for row in sql.execute(
+        "select course from enrollments where student_number = ? order by course",
+        (student_number,)
+    ).fetchall()]
+
+
+def competencies_for(sql, student_number):
+    """(id, name, course) for the courses this student takes, in id order.
+
+    A student with no enrollment rows gets the full list, so an unenrolled or
+    not-yet-loaded student is never shown a blank page. A part-time student in one
+    course gets only that course's competencies (#11).
+    """
+    courses = enrolled_courses(sql, student_number)
+    if not courses:
+        return sql.execute(
+            "select id, name, course from competencies order by id"
+        ).fetchall()
+    marks = ','.join('?' * len(courses))
+    return sql.execute(
+        "select id, name, course from competencies where course in (" + marks
+        + ") order by id",
+        courses
+    ).fetchall()
+
+
 def mark_present(sql, student_number, day):
     # Record that a student showed up for one studio session. Idempotent: the
     # (student, day) primary key means a second check-in the same day is ignored,

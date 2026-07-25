@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS endorsements;
+DROP TABLE IF EXISTS enrollments;
 DROP TABLE IF EXISTS requests;
 DROP TABLE IF EXISTS achievements;
 DROP TABLE IF EXISTS students;
@@ -86,6 +87,19 @@ CREATE TABLE attendance (
     student_number TEXT,
     day TEXT,
     PRIMARY KEY (student_number, day),
+    FOREIGN KEY (student_number) REFERENCES students(student_number)
+);
+
+-- enrollment: one row = a student is taking one course (#11). The studio runs
+-- CPS109 and CPS213 together, so a full-time student has two rows; a part-time
+-- student may have only one, and should then see only that course's competencies.
+--
+-- A student with NO rows here is treated as enrolled in everything, so an
+-- unenrolled or not-yet-loaded student is never shown a blank list.
+CREATE TABLE enrollments (
+    student_number TEXT,
+    course TEXT,
+    PRIMARY KEY (student_number, course),
     FOREIGN KEY (student_number) REFERENCES students(student_number)
 );
 

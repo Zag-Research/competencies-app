@@ -46,10 +46,11 @@ def mark_student(student_number=None):
         # one segmented button group per competency. Tapping a button sets
         # that state and saves it (see static/js/mark.js). No Save button.
         current_course = None
-        for (cid, name, course) in sql.execute(
-                "select id, name, course from competencies order by id").fetchall():
-            # Heading per course so a TA marking sees the 80 items in two labelled
-            # blocks (CPS109, then CPS213) instead of one long run.
+        # Only the courses this student takes (#11): marking a CPS213 competency
+        # for a CPS109-only student would be meaningless.
+        for (cid, name, course) in db.competencies_for(sql, student_number):
+            # Heading per course so a TA marking sees the items in labelled blocks
+            # (CPS109, then CPS213) instead of one long run.
             if course != current_course:
                 p += h2(course or 'Other')
                 current_course = course

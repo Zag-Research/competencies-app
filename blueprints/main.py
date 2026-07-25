@@ -66,12 +66,34 @@ def view_student(student_number=None):
         ).fetchall():
             states[cid] = status
             recorded_at[cid] = recorded
+        # Only this student's enrolled courses (#11): a part-time student in CPS109
+        # sees 40 competencies, not all 80.
+        comps = db.competencies_for(sql, student_number)
+        # Optional filter to one course, offered only when they take more than one.
+        courses_here = list(dict.fromkeys(c for (_cid, _name, c) in comps))
+        selected = request.args.get('course')
+        if selected not in courses_here:
+            selected = None
+        if len(courses_here) > 1:
+            filt = div(span('Show ')).classes('subnav')
+            alllink = a('All', href=url_for('main.view_student',
+                                            student_number=student_number)).classes('queue-toggle')
+            if selected is None:
+                alllink.addClasses('is-active')
+            filt += alllink
+            for c in courses_here:
+                link = a(c, href=url_for('main.view_student',
+                                         student_number=student_number, course=c)).classes('queue-toggle')
+                if selected == c:
+                    link.addClasses('is-active')
+                filt += link
+            p += filt
         current_course = None
-        for (cid, name, course) in sql.execute(
-            "select id, name, course from competencies order by id"
-        ).fetchall():
+        for (cid, name, course) in comps:
+            if selected and course != selected:
+                continue
             # One heading per course as the list crosses from CPS109 into CPS213,
-            # so the combined 80-competency list stays readable.
+            # so the combined list stays readable.
             if course != current_course:
                 p += h2(course or 'Other')
                 current_course = course

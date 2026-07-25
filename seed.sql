@@ -6,6 +6,18 @@ INSERT INTO students VALUES('Alice', 'Chen', '500111111');
 INSERT INTO students VALUES('Ben', 'Okafor', '500222222');
 INSERT INTO students VALUES('Chloe', 'Diaz', '500333333');
 
+-- enrollment. Most take both courses; Chloe is part-time in CPS109 only, so her
+-- student view should show 40 competencies, not 80 (#11).
+INSERT INTO enrollments VALUES('600990517', 'CPS109');
+INSERT INTO enrollments VALUES('600990517', 'CPS213');
+INSERT INTO enrollments VALUES('500880917', 'CPS109');
+INSERT INTO enrollments VALUES('500880917', 'CPS213');
+INSERT INTO enrollments VALUES('500111111', 'CPS109');
+INSERT INTO enrollments VALUES('500111111', 'CPS213');
+INSERT INTO enrollments VALUES('500222222', 'CPS109');
+INSERT INTO enrollments VALUES('500222222', 'CPS213');
+INSERT INTO enrollments VALUES('500333333', 'CPS109');
+
 -- competencies: the official CPS109 (Python) and CPS213 (digital logic) lists,
 -- 40 each, tagged by course. Each top-level competency is one row; its sub-points
 -- from the source document become the description (the scope a TA evaluates).

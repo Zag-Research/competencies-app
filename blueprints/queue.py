@@ -40,9 +40,9 @@ def queue_student_view(student_number):
             (student_number,)
         ).fetchall()
         pending_ids = {row[1] for row in pending}
-        all_competencies = sql.execute(
-            "select id, name, course from competencies order by id"
-        ).fetchall()
+        # Only the student's enrolled courses (#11): a part-time student cannot
+        # sign up for the other course's competencies.
+        all_competencies = db.competencies_for(sql, student_number)
         # Allowance is per studio session, so a student can plan a week ahead
         # without spending one day's worth of slots.
         remaining = {
@@ -563,6 +563,11 @@ def queue_join():
     today = logic.today_toronto().isoformat()
     if competency_ids:
         with db.cursor() as sql:
+            # Only competencies in the student's enrolled courses (#11). The sign-up
+            # UI already hides the others, but a hand-crafted POST must not book a
+            # competency from a course they are not taking.
+            allowed = {str(cid) for (cid, _n, _c) in db.competencies_for(sql, user)}
+            competency_ids = [c for c in competency_ids if c in allowed]
             # A seat only means "I am here now", so only a booking for today can
             # inherit today's seat. A future booking starts seatless: the student
             # enters a seat when they actually arrive for that session.
