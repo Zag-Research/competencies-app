@@ -1,10 +1,14 @@
 """The staff marking page and its per-tap save endpoint."""
-from flask import Blueprint, url_for
+from flask import Blueprint, url_for, redirect
 from myhtml import *
 import db
-from common import userCas, page_header
+from common import current_user, page_header
 
 mark_bp = Blueprint('mark', __name__)
+
+# The only states /save may write. Anything else is a bad request: the endpoint
+# writes straight to achievements, so it must not accept arbitrary status text.
+SAVE_STATES = {'unassessed', 'achieved', 'cooling_off'}
 
 # Buttons shown per competency on the marking page, in display order.
 # The value is what gets POSTed to /save; 'unassessed' deletes the row.
@@ -17,7 +21,11 @@ MARK_BUTTONS = [
 
 @mark_bp.route('/mark/<student_number>')
 def mark_student(student_number=None):
-    user, casUser = userCas()
+    # Staff only: this is the evaluator's marking screen. A student reaching it
+    # would see (and, via /save, could set) anyone's results.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
     p = page()
     p.setJs('/static/js/mark.js')
     p += page_header()
@@ -79,6 +87,15 @@ def save_mark(student_number, competency_id, new_state):
     #   tapped to achieved     -> save it as achieved
     #   tapped to cooling_off  -> save it as cooling off
     # Each tap saves on its own, no Save button.
+    #
+    # Staff only, and locked to the three known states. Without this guard any
+    # signed-in student could POST their own competencies to 'achieved', or write
+    # junk status text, straight into achievements.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return ('', 403)
+    if new_state not in SAVE_STATES:
+        return ('', 400)
     with db.cursor() as sql:
         if new_state == 'unassessed':
             sql.execute(

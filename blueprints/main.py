@@ -3,7 +3,7 @@ from flask import Blueprint, url_for, redirect, request, session
 from myhtml import *
 import db
 import logic
-from common import current_user, userCas, page_header
+from common import current_user, page_header
 
 main_bp = Blueprint('main', __name__)
 
@@ -37,7 +37,13 @@ def index():
 
 @main_bp.route('/view/<student_number>')
 def view_student(student_number=None):
-    user, casUser = userCas()
+    cur_user, cur_role = current_user()
+    if cur_user is None:
+        return redirect(url_for('auth.login'))
+    # A student may only see their own progress, not a classmate's grades. Staff
+    # (who mark and coach) can view anyone.
+    if cur_role == 'student' and cur_user != student_number:
+        return redirect(url_for('main.view_student', student_number=cur_user))
     # One-shot notice from a just-submitted thank-you (set by endorse()).
     endorse_notice = session.pop('endorse_notice', None)
     p = page()
@@ -52,7 +58,6 @@ def view_student(student_number=None):
             return str(p)
         first, last = student
         p += h1('Progress: ' + first + ' ' + last)
-        cur_user, cur_role = current_user()
         nav = div().classes('subnav')
         nav += a('← Back to students', href=url_for('main.index')).classes('back-link')
         if cur_role == 'student' and cur_user == student_number:

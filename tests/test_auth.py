@@ -1,0 +1,108 @@
+"""Authorization guards: who is allowed to mark, and to view whose progress.
+
+These pin the fixes for the three holes found in the Monday quality sweep:
+- /save wrote achievements with no auth at all (a student could self-mark).
+- /mark opened the staff marking screen to anyone.
+- /view let a student read a classmate's grades.
+"""
+import sqlite3
+
+import pytest
+
+import db as db_module
+
+
+@pytest.fixture
+def db(tmp_path, monkeypatch):
+    path = tmp_path / 'test.db'
+    with open('schema.sql') as f:
+        schema = f.read()
+    connection = sqlite3.connect(path)
+    connection.executescript(schema)
+    connection.commit()
+    connection.close()
+    monkeypatch.setattr(db_module, 'DB_PATH', str(path))
+    with db_module.cursor() as sql:
+        sql.execute("insert into students values ('Alice', 'Chen', '500111111')")
+        sql.execute("insert into students values ('Ben', 'Okafor', '500222222')")
+        sql.execute("insert into competencies (id, name, course) values (1, 'Nested loops', 'CPS109')")
+    return db_module
+
+
+def client_as(username, role):
+    import app as app_module
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = username
+        s['role'] = role
+    return c
+
+
+def anon_client():
+    import app as app_module
+    return app_module.app.test_client()
+
+
+def achievement_count():
+    with db_module.cursor() as sql:
+        return sql.execute('select count(*) from achievements').fetchone()[0]
+
+
+# --- /save must be staff-only (was: no auth at all) ----------------------
+
+def test_student_cannot_self_mark_via_save(db):
+    """The critical one: a student POSTing their own competency to achieved."""
+    resp = client_as('500111111', 'student').post('/save/500111111/1/achieved')
+    assert resp.status_code == 403
+    assert achievement_count() == 0
+
+
+def test_anonymous_cannot_save(db):
+    resp = anon_client().post('/save/500111111/1/achieved')
+    assert resp.status_code == 403
+    assert achievement_count() == 0
+
+
+def test_staff_can_save(db):
+    resp = client_as('dmason', 'staff').post('/save/500111111/1/achieved')
+    assert resp.status_code == 200
+    assert achievement_count() == 1
+
+
+def test_save_rejects_an_unknown_state(db):
+    """/save writes straight to achievements, so it must refuse junk status text."""
+    resp = client_as('dmason', 'staff').post('/save/500111111/1/hacked')
+    assert resp.status_code == 400
+    assert achievement_count() == 0
+
+
+# --- /mark must be staff-only --------------------------------------------
+
+def test_student_cannot_open_the_mark_page(db):
+    resp = client_as('500111111', 'student').get('/mark/500111111')
+    assert resp.status_code == 302  # redirected to login, not shown
+
+
+def test_staff_can_open_the_mark_page(db):
+    resp = client_as('dmason', 'staff').get('/mark/500111111')
+    assert resp.status_code == 200
+
+
+# --- /view: a student sees only their own progress -----------------------
+
+def test_student_cannot_view_a_classmates_progress(db):
+    c = client_as('500111111', 'student')
+    resp = c.get('/view/500222222')  # Ben's page
+    assert resp.status_code == 302
+    # Bounced back to their own page, not shown Ben's.
+    assert resp.headers['Location'].endswith('/view/500111111')
+
+
+def test_student_can_view_their_own_progress(db):
+    resp = client_as('500111111', 'student').get('/view/500111111')
+    assert resp.status_code == 200
+
+
+def test_staff_can_view_any_student(db):
+    resp = client_as('dmason', 'staff').get('/view/500222222')
+    assert resp.status_code == 200
