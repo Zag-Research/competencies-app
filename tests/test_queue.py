@@ -107,6 +107,21 @@ def test_claim_group_takes_everyone_waiting_on_a_competency(db):
     assert (won, lost) == (2, 0)
 
 
+def test_cohort_view_survives_a_cleared_seat(db, staff):
+    """A claimed student who clears their seat must not crash the cohort page.
+
+    'I have left the lab' sets the seat to None on an already-claimed request. The
+    cohort view used to render 'seat ' + None and 500; now it shows 'booked'.
+    """
+    add_request('500111111', 1)                            # seat defaults to '12'
+    with db.cursor() as sql:
+        db.claim_competency_group(sql, 1, 'dmason', STUDIO)   # TA takes the cohort
+        db.set_seat(sql, '500111111', None, STUDIO)           # student leaves -> seat cleared
+    resp = staff.get('/queue/competency/1')
+    assert resp.status_code == 200                         # no 500
+    assert 'booked' in resp.get_data(as_text=True)         # shows "booked", not a crash
+
+
 # --- declining a single competency (#19) ---------------------------------
 
 def test_decline_releases_only_that_competency(db):
@@ -218,3 +233,24 @@ def test_decline_endpoint_rejects_a_student(db):
         s['role'] = 'student'
     client.post('/queue/decline/' + str(declined))
     assert request_row(declined) == ('claimed', 'dmason')
+
+
+def test_undo_only_works_on_your_own_mark(db, staff):
+    """A TA cannot undo (and delete) another TA's recorded mark."""
+    import app as app_module
+    rid = add_request('500111111', 1)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+    staff.post('/queue/mark/' + str(rid) + '/achieved')   # dmason marks it achieved
+    # A different TA tries to undo dmason's mark.
+    other = app_module.app.test_client()
+    with other.session_transaction() as s:
+        s['user'] = 'lfortune'
+        s['role'] = 'staff'
+    other.post('/queue/undo/' + str(rid))
+    with db.cursor() as sql:
+        still_there = sql.execute(
+            "select count(*) from achievements"
+            " where student_number = '500111111' and competency_id = 1"
+        ).fetchone()[0]
+    assert still_there == 1   # dmason's mark survived; lfortune could not touch it

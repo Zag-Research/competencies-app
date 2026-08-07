@@ -115,7 +115,8 @@ def view_student(student_number=None):
         # classmate. Staff viewing this page (via "View") do not see the control.
         if cur_role == 'student' and cur_user == student_number:
             mates = db.classmates(sql, student_number)
-            given = db.endorsements_given_today(sql, student_number)
+            given = db.endorsements_given_today(
+                sql, student_number, logic.today_toronto().isoformat())
             p += h2('Thank a classmate')
             p += div('Someone help you today? Give them a shout-out. It counts '
                      'toward their mark. One per classmate per day.').classes('subnav')
@@ -154,7 +155,8 @@ def endorse():
             # Empty pick, unknown number, or their own name: nothing recorded.
             session['endorse_notice'] = 'Pick a classmate from the list.'
             return redirect(url_for('main.view_student', student_number=user))
-        added = db.add_endorsement(sql, user, to_student)
+        added = db.add_endorsement(
+            sql, user, to_student, logic.today_toronto().isoformat())
     name = who[0] + ' ' + who[1]
     session['endorse_notice'] = (
         'Thanks sent to ' + name + '.' if added

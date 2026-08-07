@@ -424,7 +424,7 @@ def queue_cohort_view(competency_id, evaluator):
             a(last + ', ' + first,
               href=url_for('queue.queue_evaluate', student_number=student_number)
               ).classes('progress-name'),
-            span('seat ' + seat).classes('queue-card-seat'),
+            span(seat_label(seat)).classes('queue-card-seat'),
         ).classes('queue-cohort-who')
         p += div(who, actions).classes('queue-row')
     p += form(
@@ -617,9 +617,10 @@ def queue_seat():
     with db.cursor() as sql:
         db.set_seat(sql, user, seat or None, today)
         # Taking a seat is a stronger "I am here" than the check-in button, so it
-        # marks attendance too. Leaving (empty seat) does not un-attend: they were
-        # still here today.
-        if seat:
+        # marks attendance too. Guarded by is_studio_day like queue_checkin, so a
+        # crafted POST on a non-class day can't inflate the attended count. Leaving
+        # (empty seat) does not un-attend: they were still here today.
+        if seat and logic.is_studio_day(today):
             db.mark_present(sql, user, today)
     if seat:
         session['queue_notice'] = 'Seat ' + seat + ' saved. A TA will come to you.'
@@ -834,9 +835,14 @@ def queue_undo(request_id):
     if user is None or role != 'staff':
         return redirect(url_for('auth.login'))
     with db.cursor() as sql:
+        # Only a request THIS evaluator just marked: status 'done' (already marked)
+        # and claimed_by them. Without this, any staff user could undo another TA's
+        # mark, or pull a 'waiting' request into their own claim past the AVAILABLE
+        # guards. Mirrors the ownership check in queue_mark.
         req = sql.execute(
-            "select student_number, competency_id from requests where id = ?",
-            (request_id,)
+            """select student_number, competency_id from requests
+                where id = ? and status = 'done' and claimed_by = ?""",
+            (request_id, user)
         ).fetchone()
         if req is None:
             return redirect(url_for('queue.queue'))

@@ -108,6 +108,13 @@ def test_taking_a_seat_also_marks_present(db, monkeypatch):
     assert count_for('500111111') == 1
 
 
+def test_seat_on_a_non_studio_day_does_not_mark_present(db, monkeypatch):
+    """A crafted seat POST on a non-class day must not inflate the attended count."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 25))  # Saturday
+    signed_in_as('500111111', 'student').post('/queue/seat', data={'seat': 'hax'})
+    assert count_for('500111111') == 0
+
+
 def test_a_student_cannot_check_in_for_someone_else(db, monkeypatch):
     monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))
     # Staff hitting the student check-in endpoint records nothing.

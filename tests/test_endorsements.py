@@ -4,6 +4,10 @@ import sqlite3
 import pytest
 
 import db as db_module
+import logic
+
+# A fixed calendar day for the db-level tests.
+DAY = '2026-07-28'
 
 
 @pytest.fixture
@@ -36,28 +40,28 @@ def received_count(to_student):
 
 def test_a_thank_you_is_recorded(db):
     with db.cursor() as sql:
-        assert db.add_endorsement(sql, '500111111', '500222222') is True
+        assert db.add_endorsement(sql, '500111111', '500222222', DAY) is True
     assert received_count('500222222') == 1
 
 
 def test_second_thank_you_same_day_is_ignored(db):
     with db.cursor() as sql:
-        assert db.add_endorsement(sql, '500111111', '500222222') is True
-        assert db.add_endorsement(sql, '500111111', '500222222') is False
+        assert db.add_endorsement(sql, '500111111', '500222222', DAY) is True
+        assert db.add_endorsement(sql, '500111111', '500222222', DAY) is False
     # Still one: a repeat tap cannot inflate the count.
     assert received_count('500222222') == 1
 
 
 def test_two_different_students_can_thank_the_same_person(db):
     with db.cursor() as sql:
-        db.add_endorsement(sql, '500111111', '500222222')
-        db.add_endorsement(sql, '500333333', '500222222')
+        db.add_endorsement(sql, '500111111', '500222222', DAY)
+        db.add_endorsement(sql, '500333333', '500222222', DAY)
     assert received_count('500222222') == 2
 
 
 def test_a_student_cannot_thank_themselves(db):
     with db.cursor() as sql:
-        assert db.add_endorsement(sql, '500111111', '500111111') is False
+        assert db.add_endorsement(sql, '500111111', '500111111', DAY) is False
     assert received_count('500111111') == 0
 
 
@@ -73,16 +77,16 @@ def test_classmates_excludes_self(db):
 
 def test_given_today_lists_who_you_thanked(db):
     with db.cursor() as sql:
-        db.add_endorsement(sql, '500111111', '500222222')
-        given = db.endorsements_given_today(sql, '500111111')
+        db.add_endorsement(sql, '500111111', '500222222', DAY)
+        given = db.endorsements_given_today(sql, '500111111', DAY)
     assert given == [('Ben', 'Okafor')]
 
 
 def test_tally_counts_and_orders_by_most_thanked(db):
     with db.cursor() as sql:
-        db.add_endorsement(sql, '500111111', '500222222')
-        db.add_endorsement(sql, '500333333', '500222222')
-        db.add_endorsement(sql, '500222222', '500333333')
+        db.add_endorsement(sql, '500111111', '500222222', DAY)
+        db.add_endorsement(sql, '500333333', '500222222', DAY)
+        db.add_endorsement(sql, '500222222', '500333333', DAY)
         tallies = db.endorsement_tallies(sql)
     # Ben (2) ahead of Chloe (1); Alice, thanked by nobody, absent.
     assert tallies == [('Ben', 'Okafor', 2), ('Chloe', 'Diaz', 1)]
@@ -129,10 +133,28 @@ def test_staff_cannot_endorse(db):
 
 def test_tally_page_is_staff_only(db):
     with db.cursor() as sql:
-        db.add_endorsement(sql, '500111111', '500222222')
+        db.add_endorsement(sql, '500111111', '500222222', DAY)
     staff = signed_in_as('dmason', 'staff')
     body = staff.get('/endorsements').get_data(as_text=True)
     assert 'Okafor, Ben' in body
     # A student is redirected away rather than shown the tally.
     student = signed_in_as('500111111', 'student')
     assert student.get('/endorsements').status_code == 302
+
+
+def test_endorse_stamps_the_toronto_day_not_utc(db, monkeypatch):
+    """The stored day must come from Toronto time, not the DB's UTC date('now').
+
+    The bug: with SQL date('now') (UTC), an evening thank-you gets stamped with
+    tomorrow's date, so the once-per-day rule misses a same-evening re-tap. Pinning
+    'today' to a known Toronto date and checking the stored day catches a regression.
+    """
+    from datetime import date
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))
+    signed_in_as('500111111', 'student').post(
+        '/endorse', data={'to_student': '500222222'})
+    with db.cursor() as sql:
+        stored_day = sql.execute(
+            "select day from endorsements where from_student = '500111111'"
+        ).fetchone()[0]
+    assert stored_day == '2026-07-28'
