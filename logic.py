@@ -4,7 +4,7 @@ No Flask, no database, no HTML in here. Give these functions a value and they
 hand back a rule answer. Because they have no hidden dependencies, this is the
 easiest module in the app to read top-to-bottom and to unit test.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 # Internal state -> the text shown to a user.
@@ -70,3 +70,53 @@ def cooling_off_label(date_recorded):
     if datetime.now(timezone.utc) >= unlock:
         return 'Available to retry now'
     return 'Available to retry ' + unlock.strftime('%A 8 AM')
+
+
+# Studio sessions (#17). The studio runs three times a week: Tuesday 4-5 PM,
+# Wednesday 3-6 PM, Thursday 9 AM-12 PM. Python's weekday() has Monday at 0, so
+# those are 1, 2 and 3.
+#
+# These are derived from the weekly pattern rather than read from a table of term
+# dates, because the Fall 2026 calendar is not settled. The cost is that this
+# cannot know about holidays or reading week, so it may offer a day that does not
+# actually run. Replace with a seeded studios table once the real dates exist.
+STUDIO_WEEKDAYS = (1, 2, 3)
+STUDIO_LOOKAHEAD = 6
+
+
+def today_toronto():
+    # "Today" for scheduling is the local studio day, not UTC: at 9 PM Toronto the
+    # UTC date has already rolled over, and a student signing up then means today.
+    return datetime.now(timezone.utc).astimezone(TORONTO).date()
+
+
+def is_studio_day(iso_date):
+    try:
+        return date.fromisoformat(iso_date).weekday() in STUDIO_WEEKDAYS
+    except (TypeError, ValueError):
+        return False
+
+
+def upcoming_studios(count=STUDIO_LOOKAHEAD, today=None):
+    """The next `count` studio days as ISO date strings, including today if it is one."""
+    day = today or today_toronto()
+    out = []
+    while len(out) < count:
+        if day.weekday() in STUDIO_WEEKDAYS:
+            out.append(day.isoformat())
+        day += timedelta(days=1)
+    return out
+
+
+def next_studio(today=None):
+    # The day a sign-up defaults to: today when the studio runs, else the next one.
+    return upcoming_studios(1, today)[0]
+
+
+def studio_label(iso_date):
+    # '2026-07-28' -> 'Tuesday, July 28'. Built without %-d, which is not portable.
+    try:
+        d = date.fromisoformat(iso_date)
+    except (TypeError, ValueError):
+        return iso_date
+    return d.strftime('%A, %B ') + str(d.day)

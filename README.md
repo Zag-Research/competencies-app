@@ -33,8 +33,15 @@ on `/login`, type one of the seeded usernames:
 | Type this | Signs in as |
 |-----------|-------------|
 | `dmason` | staff (lands on the evaluation queue) |
+| `lfortune` | staff. Sign in as a *second* TA in a private window to watch queue claiming: a student claimed by `dmason` disappears from `lfortune`'s queue. |
 | `600990517` | student Priya Singh |
 | `500880917` | student Sarah Hassan |
+| `500111111` | student Alice Chen |
+| `500222222` | student Ben Okafor |
+| `500333333` | student Chloe Diaz |
+
+Sign several students up for the same competency to see the by-competency cohort
+view do something interesting.
 
 ## What it does
 
@@ -48,14 +55,85 @@ their own progress page. The main pages:
 - **Student view** (`/view/<student_number>`): read-only progress, each
   competency shown as a colored status pill.
 - **Evaluation queue** (`/queue`): the lab coordination layer.
-  - *Students* sign up for the competencies they want evaluated today and enter
-    their seat number; they can cancel their own requests. Only competencies they
-    can actually attempt appear (not assessed, or past their retry window), capped
-    at a configurable number of requests per day.
-  - *Staff* see one card per waiting student (name, seat, their requested
-    competencies), longest-waiting first. Each competency has Achieved / Not
-    passed buttons that record the result and clear it from the queue in one tap,
-    so a TA can mark students while moving around the room.
+  - *Students* sign up for the competencies they want evaluated today; they can
+    cancel their own requests. Only competencies they can actually attempt appear
+    (not assessed, or past their retry window), capped at a configurable number of
+    requests per day.
+
+    Sign-up asks for **no seat number**, because students sign up before they get
+    to the lab (from home, on the way in) and seats are not assigned: you take
+    whichever machine is free. They enter a seat once they are actually sitting
+    down, and **that is what makes them visible to staff**. A request with no seat
+    is a plan, not a person a TA can walk over to, so the staff queue does not list
+    it. Leaving the lab clears the seat, which drops them off the staff queue
+    without cancelling what they signed up for.
+  - *Staff* see the waiting students, longest-waiting first, in one of two
+    groupings (toggle at the top of the queue):
+    - **By student** (`/queue?group=student`): one card per student, listing the
+      competencies they asked for. Tapping the card **claims** them and opens
+      their evaluation screen (`/queue/student/<student_number>`), which lists
+      only what they requested, each with Achieved / Not passed.
+    - **By competency** (`/queue?group=competency`): one card per competency,
+      listing everyone waiting on it. Tapping it claims the whole cohort and
+      opens `/queue/competency/<id>`, where the TA marks each student on that
+      one competency. This is a **TA worklist, not a group session**: the point
+      is that marking a cohort back to back applies one consistent standard,
+      rather than the bar drifting as you jump between competencies. (If students
+      gathered to be evaluated together they could copy the previous answer.)
+  - Marking records the result and clears the request in one tap, with a one-shot
+    **Undo**. A TA can also **Release** a student (or cohort) back to the queue.
+
+### Queue claiming
+
+Two TAs must never walk over to the same student. Selecting a student *claims*
+them: their requests flip to `claimed` by that TA and they vanish from every other
+TA's queue.
+
+The claim is a single conditional `UPDATE`, and the affected row count decides the
+winner (`db.claim_student`):
+
+```sql
+update requests
+   set status = 'claimed', claimed_by = ?, claimed_at = CURRENT_TIMESTAMP
+ where student_number = ?
+   and (seat is not null and seat != ''
+        and (status = 'waiting'
+             or (status = 'claimed' and claimed_at < datetime('now', ?))));
+```
+
+`rowcount > 0` → the student is yours. `rowcount == 0` → another TA got there
+first, because *their* write is what made the condition false for you. That is
+**optimistic concurrency control**: there is no explicit lock, the `WHERE` clause
+*is* the lock.
+
+A `SELECT`-then-`UPDATE` would be broken here. Both TAs would read `'waiting'`,
+both would pass the check, and both would write, with the second silently
+overwriting the first. The check and the write have to be one statement so nothing
+can interleave between them.
+
+**Claiming takes the whole student**, not just one of their requests. A student can
+only talk to one TA at a time, so handing the same student to two TAs (one per
+competency) would move the collision out of the queue and into the room. The
+visible cost: if Alice wants Recursion *and* Nested loops, and a TA takes the
+Recursion cohort, Alice drops out of the Nested loops cohort until that TA is done
+with her. Cohorts can look smaller than expected.
+
+**Stale claims.** A TA who claims a student and then closes their laptop would
+otherwise strand that student where no TA can see them. A claim older than
+`claim_timeout_minutes` (a `settings` row, default 20) counts as available again.
+This is evaluated at read time, in the same `db.AVAILABLE` predicate used to list
+the queue and to guard the claim, so there is no sweeper job and the two can never
+disagree about who is free.
+
+**Undo** returns a request to `claimed` *by the same TA*, not to `waiting`. A
+mis-tap while standing at the student's desk should not fling them back into the
+global queue for someone else to pick up.
+
+That `seat is not null` at the top of the predicate is the "is the student actually
+here?" check (see above). It lives in `db.AVAILABLE`, which is used both to list the
+queue and to guard the claim, so the two can never disagree about who is free. A
+student who has not sat down cannot be listed *or* claimed, and a TA never walks
+over to an empty chair.
 
 ## Competency states
 
@@ -173,6 +251,8 @@ erDiagram
         TEXT seat
         TEXT requested_at
         TEXT status
+        TEXT claimed_by
+        TEXT claimed_at
     }
     settings {
         TEXT key PK
@@ -188,5 +268,12 @@ single elapsed-time comparison. The composite primary key is (`student_number`,
 request cap.
 
 `requests` is the evaluation queue: one row per competency a student asks to be
-evaluated on. `status` is `'waiting'` until a TA records the result, which writes
-to `achievements` and flips the request to `'done'` in one step.
+evaluated on. `status` flows `'waiting'` → `'claimed'` → `'done'`:
+
+| status | meaning |
+|--------|---------|
+| `waiting` | nobody has taken this student yet; shows in every TA's queue |
+| `claimed` | a TA has taken them and is walking over. `claimed_by` is that TA, `claimed_at` is when. Hidden from every other TA's queue, and treated as `waiting` again once older than `claim_timeout_minutes`. |
+| `done` | evaluated. The result is written to `achievements` and the request flipped, in one step. |
+
+See [Queue claiming](#queue-claiming) for how a claim is made race-safe.

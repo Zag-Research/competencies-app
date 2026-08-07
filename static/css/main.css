@@ -240,6 +240,52 @@ h1 {
 .queue-card .queue-row:last-child {
     border-bottom: none;
 }
+/* The whole queue card is a submit button (tap = claim the student + open their
+   evaluation screen), so it has to shed the default button chrome and stay a
+   full-width, left-aligned card. */
+.queue-claim {
+    display: block;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: #fff;
+    cursor: pointer;
+}
+.queue-claim:hover {
+    border-color: #9aa1ad;
+    background: #f6f7f9;
+}
+.queue-release {
+    margin-top: 1.2rem;
+}
+/* Switch the same queue between grouping by student and grouping by competency. */
+.queue-toggle {
+    margin-left: 0.8rem;
+    color: #5f6571;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+}
+.queue-toggle.is-active {
+    color: #1c2333;
+    font-weight: 700;
+    border-bottom-color: #1c2333;
+}
+/* On a cohort row the student's name is a link through to their full evaluation
+   screen, so it needs room next to the two outcome buttons. */
+.queue-cohort-who {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+}
+/* Confirmation that the student is checked in at a machine, so staff can see them. */
+.queue-seat-set {
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.8rem;
+    border-radius: 8px;
+    background: #eef6ee;
+    color: #23502a;
+}
 /* The two outcome buttons sit side by side on each competency row. */
 .queue-actions {
     display: flex;
@@ -252,6 +298,54 @@ h1 {
 .queue-no {
     border-color: #f1a208;
     color: #8a5a00;
+}
+/* "Can't evaluate": not a result, so it stays neutral grey and does not compete
+   with the two outcome buttons beside it. */
+.queue-defer {
+    border-color: #b9bec7;
+    color: #5f6571;
+}
+
+/* The competency's sub-points, shown to staff while evaluating: what this
+   competency actually covers, so a TA knows what to probe. Secondary to the
+   competency name, never competing with the outcome buttons. */
+.competency-scope {
+    margin-top: 0.2rem;
+    max-width: 46rem;
+    color: #5f6571;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+/* Multi-point scopes render as a list: a seven-point competency is unreadable
+   as one run-on line. Tight margins so it stays subordinate to the name. */
+ul.competency-scope {
+    margin: 0.25rem 0 0;
+    padding-left: 1.1rem;
+}
+ul.competency-scope li {
+    margin-bottom: 0.1rem;
+}
+
+/* Attendance self check-in on the student queue page. */
+.queue-checkin {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+/* Peer shout-out: thank a classmate from a dropdown on your own progress page. */
+.endorse-select {
+    padding: 0.4rem 0.5rem;
+    margin-right: 0.5rem;
+    border: 1px solid #b9bec7;
+    border-radius: 4px;
+}
+.endorse-given {
+    margin-top: 0.6rem;
+    color: #5f6571;
+    font-size: 0.9rem;
 }
 
 /* Dev sign-in page */
