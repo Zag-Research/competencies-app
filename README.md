@@ -31,14 +31,13 @@ moving.
 - **Per-course enrollment.** Students only see and sign up for the courses they are
   actually enrolled in.
 
-## Why it's solid
+## How I know it works
 
-- **~100 automated tests** cover the queue, the sign-up rules, attendance,
-  shout-outs, enrollment, and the sign-in guards. They run in about a second
+- **About 100 automated tests** check the queue, the sign-up rules, attendance,
+  shout-outs, enrollment, and the sign-in checks. They run in about a second
   (`python -m pytest tests/`).
-- **Every feature ships through a pull-request review** before merging, and an
-  independent code review of the latest features came back with only minor issues, no
-  real bugs.
+- **Every change is reviewed in a pull request before it is merged.** An independent
+  code review of the recent features found only minor issues and no real bugs.
 
 ## Quick start
 
