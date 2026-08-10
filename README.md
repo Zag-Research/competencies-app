@@ -1,7 +1,17 @@
 # Competencies App
 
-A Flask web app for tracking student competencies for the CPS109 Python programming course at TMU in Fall 2026.
-Students demonstrate competencies in lab; instructors and TAs record them in real time. No lectures, assignments, or exams.
+A Flask web app for a competency-based studio at TMU (Fall 2026) that runs two
+first-year courses together: **CPS109** (Python) and **CPS213** (digital logic).
+There are no lectures, assignments, or exams. Instead, students demonstrate
+competencies one-on-one to a TA in the lab, and the app coordinates that: students
+sign up for what they are ready to show, TAs work a live queue, and results are
+recorded in real time.
+
+Each course has 40 competencies. A few rules keep the studio fair and moving:
+students may request only a few per session (a cap), must keep progress on both
+courses roughly balanced (the [balance rule](#the-balance-rule)), and a competency
+a TA cannot get to is carried over rather than lost (see
+[deferred competencies](#deferred-carried-over-competencies)).
 
 ## Quick start
 
@@ -57,8 +67,9 @@ their own progress page. The main pages:
 - **Evaluation queue** (`/queue`): the lab coordination layer.
   - *Students* sign up for the competencies they want evaluated today; they can
     cancel their own requests. Only competencies they can actually attempt appear
-    (not assessed, or past their retry window), capped at a configurable number of
-    requests per day.
+    (not assessed, or past their retry window), and only from their enrolled
+    courses. Sign-ups are limited per studio session and kept balanced across the
+    two courses (see [The balance rule](#the-balance-rule)).
 
     Sign-up asks for **no seat number**, because students sign up before they get
     to the lab (from home, on the way in) and seats are not assigned: you take
@@ -134,6 +145,60 @@ here?" check (see above). It lives in `db.AVAILABLE`, which is used both to list
 queue and to guard the claim, so the two can never disagree about who is free. A
 student who has not sat down cannot be listed *or* claimed, and a TA never walks
 over to an empty chair.
+
+## Studio sessions and advance scheduling
+
+The studio meets three times a week (Tuesday, Wednesday, Thursday). A sign-up is
+for a specific **studio session**, not just "today": a student can book ahead, and
+each request carries the `studio_date` it is for. The staff queue defaults to
+today's live, claimable session; a TA can switch to a future day to see a read-only
+**planning roster** of who has booked it. Studio days come from the weekly pattern
+in `logic.py` (no term calendar yet).
+
+## The balance rule
+
+Each session, a student may sign up for at most a few competencies (the cap,
+default **3**, a `settings` value Dave can change without touching code), and their
+two courses must stay **within 1 of each other**: 2 of one course and 1 of the
+other is fine, but 3 and 0 is not. This keeps students moving through both CPS109
+and CPS213 rather than bingeing one. A sign-up that breaks the cap or the balance is
+**rejected whole**, with a message explaining why. The rule is a pure function
+(`logic.session_signup_ok`) checked against the session's per-course tally
+(`db.session_course_counts`) in `queue_join`.
+
+## Deferred, carried-over competencies
+
+A TA who is not prepared to evaluate a competency taps **"Can't evaluate"** on it.
+Rather than failing the student, the competency is *bumped*: it returns to the queue
+tagged with the TA who bumped it (`bumped_by`). Three things follow:
+
+- The by-student queue **flags a student that TA previously bumped**, so they can
+  pick it back up once prepped, or steer clear.
+- The bumped competency **waits for the student**: when they next take a seat it
+  follows them to that session (`db.carry_bumped_forward`), so it is never stranded
+  on a day they do not return.
+- It **does not count against the student's cap or balance**, and the student sees
+  it as "carried over", not failed.
+
+## Attendance
+
+Students check in each session ("I'm here today"), recorded in `attendance`
+(`student_number`, `day`); taking a seat marks attendance too. Staff get an
+attendance view (sessions attended per student) for the instructor's
+miss-more-than-half rule. Check-ins only count on real class days.
+
+## Peer shout-outs
+
+A student can thank a classmate who helped them, from a dropdown on their own
+progress page (`endorsements`). Staff see a received-count tally the instructor
+folds into course remarks. One thank-you per classmate per day, enforced by the
+table's primary key.
+
+## Per-course enrollment
+
+`enrollments` links a student to the courses they take, and students only see and
+sign up for their enrolled courses' competencies. Most first-years take both
+courses; a part-time student in one course sees only that one.
 
 ## Competency states
 
@@ -228,6 +293,9 @@ erDiagram
     competencies ||--o{ achievements : "has"
     students ||--o{ requests : "queues"
     competencies ||--o{ requests : "queued for"
+    students ||--o{ enrollments : "enrolled in"
+    students ||--o{ attendance : "present at"
+    students ||--o{ endorsements : "gives / gets"
     students {
         TEXT student_number PK
         TEXT first_name
@@ -237,6 +305,7 @@ erDiagram
         INTEGER id PK
         TEXT name
         TEXT description
+        TEXT course
     }
     achievements {
         TEXT student_number FK
@@ -253,6 +322,21 @@ erDiagram
         TEXT status
         TEXT claimed_by
         TEXT claimed_at
+        TEXT studio_date
+        TEXT bumped_by
+    }
+    enrollments {
+        TEXT student_number FK
+        TEXT course
+    }
+    attendance {
+        TEXT student_number FK
+        TEXT day
+    }
+    endorsements {
+        TEXT from_student FK
+        TEXT to_student FK
+        TEXT day
     }
     settings {
         TEXT key PK
