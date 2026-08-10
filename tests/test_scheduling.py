@@ -42,6 +42,33 @@ def test_retry_unlock_leaves_a_studio_day_alone():
     assert unlock.date() == date(2026, 7, 30)                      # Thursday, unchanged
 
 
+# --- reading weeks: the studio does not run even on Tue/Wed/Thu ------------
+
+def test_reading_week_days_are_not_studio_days():
+    # Fall study week Oct 13-15 2026 and Winter study week Feb 16-18 2027 are Tue/Wed/Thu,
+    # but the lab is closed, so the studio does not run.
+    for iso in ('2026-10-13', '2026-10-14', '2026-10-15',      # Fall study week
+                '2027-02-16', '2027-02-17', '2027-02-18'):     # Winter study week
+        assert logic.is_studio_day(iso) is False, iso
+    # A normal Tuesday the week before and after fall break still runs.
+    assert logic.is_studio_day('2026-10-06') is True
+    assert logic.is_studio_day('2026-10-20') is True
+
+
+def test_upcoming_studios_skips_a_reading_week():
+    # Starting Monday Oct 12 2026: the whole next Tue/Wed/Thu is fall study week, so the
+    # next three sessions jump to the following week (Oct 20-22).
+    assert logic.upcoming_studios(3, date(2026, 10, 12)) == [
+        '2026-10-20', '2026-10-21', '2026-10-22']
+
+
+def test_retry_unlock_rolls_past_a_reading_week():
+    # Fail Friday Oct 9 2026: +2 = Sunday, then the whole next week is fall study week,
+    # so the retry rolls all the way to Tuesday Oct 20.
+    unlock = logic.retry_unlock('2026-10-09 12:00:00')
+    assert unlock.date() == date(2026, 10, 20)
+
+
 def test_upcoming_studios_from_a_monday_lists_the_week():
     got = logic.upcoming_studios(count=3, today=date(2026, 7, 27))
     assert got == ['2026-07-28', '2026-07-29', '2026-07-30']
