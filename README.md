@@ -94,7 +94,8 @@ each file has one clear job:
 | `blueprints/auth.py` | sign in / sign out. |
 | `blueprints/main.py` | roster home and student progress pages. |
 | `blueprints/mark.py` | staff marking page and per-tap save. |
-| `blueprints/queue.py` | the evaluation queue (sign-up + staff marking). |
+| `blueprints/queue.py` | the evaluation queue routes (sign-up + staff marking). |
+| `blueprints/queue_views.py` | builds the queue's pages (student view, staff queue, evaluation screen). |
 | `common.py` | helpers shared across blueprints (current user, page header). |
 | `logic.py` | pure rules: competency states, the retry cooldown, studio sessions, and the balance rule. No Flask/DB/HTML. |
 | `db.py` | all data access: the `db.cursor()` context manager and every query. |
