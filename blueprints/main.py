@@ -63,14 +63,7 @@ def view_student(student_number=None):
         if cur_role == 'student' and cur_user == student_number:
             nav += a('Join queue →', href=url_for('queue.queue'))
         p += nav
-        states = {}
-        recorded_at = {}
-        for (cid, status, recorded) in sql.execute(
-            "select competency_id, status, date_recorded from achievements where student_number = ?",
-            (student_number,)
-        ).fetchall():
-            states[cid] = status
-            recorded_at[cid] = recorded
+        states, recorded_at = db.achievement_states(sql, student_number)
         # Only this student's enrolled courses (#11): a part-time student in CPS109
         # sees 40 competencies, not all 80.
         comps = db.competencies_for(sql, student_number)

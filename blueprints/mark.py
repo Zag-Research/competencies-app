@@ -44,13 +44,8 @@ def mark_student(student_number=None):
             a('View as student', href=url_for('main.view_student', student_number=student_number)).classes('back-link'),
         ).classes('subnav')
         # current recorded state per competency: competency_id -> status
-        states = {
-            row[0]: row[1]
-            for row in sql.execute(
-                "select competency_id, status from achievements where student_number = ?",
-                (student_number,)
-            ).fetchall()
-        }
+        # (this page does not need the dates, so recorded_at is discarded)
+        states, _ = db.achievement_states(sql, student_number)
         # one segmented button group per competency. Tapping a button sets
         # that state and saves it (see static/js/mark.js). No Save button.
         current_course = None

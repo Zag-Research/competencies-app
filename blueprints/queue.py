@@ -20,14 +20,7 @@ def queue_student_view(student_number):
     today = logic.today_toronto().isoformat()
     studios = logic.upcoming_studios()
     with db.cursor() as sql:
-        states = {}
-        recorded_at = {}
-        for (cid, status, recorded) in sql.execute(
-            "select competency_id, status, date_recorded from achievements where student_number = ?",
-            (student_number,)
-        ).fetchall():
-            states[cid] = status
-            recorded_at[cid] = recorded
+        states, recorded_at = db.achievement_states(sql, student_number)
         # 'claimed' as well as 'waiting': a TA taking the student must not make their
         # own queue page go blank. They still have those requests open, and someone
         # is on the way.

@@ -358,6 +358,25 @@ def achieved_competency_ids(sql, student_number):
     return {row[0] for row in rows}
 
 
+def achievement_states(sql, student_number):
+    """A student's recorded results as two dicts keyed by competency_id:
+    {id: status} and {id: date_recorded}.
+
+    A competency with no row is simply absent from both, which callers read as
+    'not assessed'. This is the one place the achievements table is read for display,
+    so the queue, the progress page, and the marking page all agree.
+    """
+    states = {}
+    recorded_at = {}
+    for (cid, status, recorded) in sql.execute(
+        "select competency_id, status, date_recorded from achievements where student_number = ?",
+        (student_number,)
+    ).fetchall():
+        states[cid] = status
+        recorded_at[cid] = recorded
+    return states, recorded_at
+
+
 def mark_present(sql, student_number, day):
     # Record that a student showed up for one studio session. Idempotent: the
     # (student, day) primary key means a second check-in the same day is ignored,
