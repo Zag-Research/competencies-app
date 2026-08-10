@@ -54,6 +54,10 @@ CREATE TABLE requests (
     -- sign up ahead, so this is not always the day they pressed the button:
     -- requested_at is when they asked, studio_date is when they want it.
     studio_date TEXT,
+    -- the TA who bumped this competency with "Can't evaluate" (#19/#24). Stays set
+    -- after it goes back to 'waiting', so the queue can flag it for that TA to pick
+    -- up later, and so it doesn't count against the student's cap. NULL = not bumped.
+    bumped_by TEXT,
     FOREIGN KEY (student_number) REFERENCES students(student_number),
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
 );

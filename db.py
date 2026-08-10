@@ -115,6 +115,22 @@ def set_seat(sql, student_number, seat, studio_date):
     )
 
 
+def carry_bumped_forward(sql, student_number, studio_date):
+    """Move a student's bumped competencies to the session they just showed up for.
+
+    A bumped request (bumped_by set, back to 'waiting') keeps its original session
+    date, so if the student does not return that day it would be stranded. When they
+    next take a seat, bring those bumped requests to that session so they resurface
+    for a TA. Only bumped ones move; a normal future booking stays on its own day.
+    """
+    sql.execute(
+        """update requests set studio_date = ?
+            where student_number = ? and status = 'waiting'
+              and bumped_by is not null and studio_date != ?""",
+        (studio_date, student_number, studio_date)
+    )
+
+
 def claim_student(sql, student_number, evaluator, studio_date):
     """Try to claim every available request for one student. True if we got them.
 
@@ -201,12 +217,17 @@ def release_request(sql, request_id, evaluator):
 
     Scoped to this evaluator's own claim, so a TA cannot bounce a request out
     from under someone else. True if we actually released something.
+
+    Records bumped_by = this evaluator (#19/#24): the competency goes back to the
+    queue, but the app remembers who bumped it so it can flag the student for that
+    TA later and keep it out of the student's cap.
     """
     sql.execute(
         """update requests
-              set status = 'waiting', claimed_by = null, claimed_at = null
+              set status = 'waiting', claimed_by = null, claimed_at = null,
+                  bumped_by = ?
             where id = ? and status = 'claimed' and claimed_by = ?""",
-        (request_id, evaluator)
+        (evaluator, request_id, evaluator)
     )
     return sql.rowcount > 0
 
@@ -217,9 +238,11 @@ def requests_used_for_studio(sql, student_number, studio_date):
     # still pending. Counting by studio_date rather than by the day they pressed the
     # button is what lets them plan a week ahead without exhausting a single day's
     # allowance. Takes an open cursor so it can run inside a caller's transaction.
+    # bumped_by is null: a bumped competency (#19) carried back into a session does
+    # not count against the student's cap, per Dave's "no penalty" rule.
     row = sql.execute(
         """select count(*) from requests
-           where student_number = ? and studio_date = ?""",
+           where student_number = ? and studio_date = ? and bumped_by is null""",
         (student_number, studio_date)
     ).fetchone()
     return row[0] if row else 0
@@ -237,6 +260,7 @@ def session_course_counts(sql, student_number, studio_date):
         """select c.course, count(*) from requests r
              join competencies c on r.competency_id = c.id
             where r.student_number = ? and r.studio_date = ?
+              and r.bumped_by is null
             group by c.course""",
         (student_number, studio_date)
     ).fetchall()

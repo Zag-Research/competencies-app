@@ -32,7 +32,8 @@ def queue_student_view(student_number):
         # own queue page go blank. They still have those requests open, and someone
         # is on the way.
         pending = sql.execute(
-            """select r.id, r.competency_id, c.name, r.seat, r.status, r.studio_date
+            """select r.id, r.competency_id, c.name, r.seat, r.status, r.studio_date,
+                      r.bumped_by
                from requests r
                join competencies c on r.competency_id = c.id
                where r.student_number = ? and r.status in ('waiting', 'claimed')
@@ -109,7 +110,7 @@ def queue_student_view(student_number):
                         type='submit').classes('roster-link')
             p += div(f).classes('queue-seat')
         current_day = None
-        for (rid, _cid, name, _seat, status, studio_date) in pending:
+        for (rid, _cid, name, _seat, status, studio_date, bumped_by) in pending:
             # A heading per session, so a student can see what they booked for
             # today versus what is waiting for them next Tuesday.
             if studio_date != current_day:
@@ -123,6 +124,11 @@ def queue_student_view(student_number):
                 # A TA is already standing up to come over. Cancelling now would
                 # pull the student out from under them.
                 row += span('being evaluated').classes('queue-card-seat')
+            elif bumped_by:
+                # A TA could not get to it; it is carried over and waiting for the
+                # student, so no action is needed and no Cancel is offered (#19).
+                row += span('carried over, we will get to it next time'
+                            ).classes('queue-card-seat')
             else:
                 row += form(
                     button('Cancel', type='submit').classes('roster-link'),
@@ -185,6 +191,7 @@ def queue_student_view(student_number):
 
 
 def queue_staff_view(group_by='student', day=None):
+    evaluator = current_user()[0]   # the TA viewing, so we can flag their bumps (#24)
     today = logic.today_toronto().isoformat()
     studios = logic.upcoming_studios()
     # The session being worked. Defaults to the soonest (today when it runs); a
@@ -230,7 +237,7 @@ def queue_staff_view(group_by='student', day=None):
                      'but claiming opens on the day.').classes('queue-notice')
             rows = sql.execute(
                 """select r.student_number, s.first_name, s.last_name,
-                          r.competency_id, c.name, r.seat
+                          r.competency_id, c.name, r.seat, r.bumped_by
                      from requests r
                      join students s on r.student_number = s.student_number
                      join competencies c on r.competency_id = c.id
@@ -241,7 +248,7 @@ def queue_staff_view(group_by='student', day=None):
         else:
             rows = sql.execute(
                 """select r.student_number, s.first_name, s.last_name,
-                          r.competency_id, c.name, r.seat
+                          r.competency_id, c.name, r.seat, r.bumped_by
                      from requests r
                      join students s on r.student_number = s.student_number
                      join competencies c on r.competency_id = c.id
@@ -254,9 +261,9 @@ def queue_staff_view(group_by='student', day=None):
         p += div(empty).classes('queue-empty')
         return str(p)
     if group_by == 'competency':
-        p += queue_by_competency(rows, day, claimable=not planning)
+        p += queue_by_competency(rows, day, claimable=not planning, evaluator=evaluator)
     else:
-        p += queue_by_student(rows, day, claimable=not planning)
+        p += queue_by_student(rows, day, claimable=not planning, evaluator=evaluator)
     return str(p)
 
 
@@ -278,22 +285,29 @@ def queue_card(claimable, action, head, body_rows):
     return div(inner).classes('queue-card')
 
 
-def queue_by_student(rows, day, claimable=True):
+def queue_by_student(rows, day, claimable=True, evaluator=None):
     # Group the flat rows by student so each student shows once, with all their
     # requested competencies listed under them. Insertion order (Python dict)
     # preserves the requested_at ordering from the query, so the student who has
     # waited longest stays at the top.
     students = {}
-    for (number, first, last, _cid, comp_name, seat) in rows:
+    for (number, first, last, _cid, comp_name, seat, bumped_by) in rows:
         if number not in students:
-            students[number] = {'name': last + ', ' + first, 'seat': seat, 'items': []}
+            students[number] = {'name': last + ', ' + first, 'seat': seat,
+                                 'items': [], 'bumped': False}
         students[number]['items'].append(comp_name)
+        # Flag the student if THIS TA bumped one of their competencies (#24), so
+        # they can pick it back up (or steer clear).
+        if bumped_by and bumped_by == evaluator:
+            students[number]['bumped'] = True
     out = div()
     for (number, group) in students.items():
         head = div(
             span(group['name']).classes('queue-card-name'),
             span(seat_label(group['seat'])).classes('queue-card-seat'),
         ).classes('queue-card-head')
+        if group['bumped']:
+            head += span('you bumped this student before').classes('queue-bumped')
         body_rows = [div(span(name).classes('progress-name')).classes('queue-row')
                      for name in group['items']]
         out += queue_card(
@@ -303,12 +317,13 @@ def queue_by_student(rows, day, claimable=True):
     return out
 
 
-def queue_by_competency(rows, day, claimable=True):
+def queue_by_competency(rows, day, claimable=True, evaluator=None):
     # Same rows, grouped the other way: one card per competency, listing everyone
     # waiting on it, so a TA can evaluate the whole cohort in one pass instead of
-    # repeating the same evaluation student by student.
+    # repeating the same evaluation student by student. (evaluator is accepted for a
+    # matching signature; the bumped flag is a by-student cue, not a per-competency one.)
     comps = {}
-    for (_number, first, last, cid, comp_name, seat) in rows:
+    for (_number, first, last, cid, comp_name, seat, _bumped_by) in rows:
         if cid not in comps:
             comps[cid] = {'name': comp_name, 'students': []}
         comps[cid]['students'].append((last + ', ' + first, seat))
@@ -629,6 +644,11 @@ def queue_seat():
     # this machine, right now." Booked-ahead requests for other days are untouched.
     today = logic.today_toronto().isoformat()
     with db.cursor() as sql:
+        # Showing up (taking a seat) is what a bumped competency was waiting for:
+        # pull the student's bumped competencies into today's session first, so the
+        # seat below lands on them too and they resurface for a TA (#19/#24).
+        if seat:
+            db.carry_bumped_forward(sql, user, today)
         db.set_seat(sql, user, seat or None, today)
         # Taking a seat is a stronger "I am here" than the check-in button, so it
         # marks attendance too. Guarded by is_studio_day like queue_checkin, so a

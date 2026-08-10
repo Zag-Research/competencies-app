@@ -9,6 +9,7 @@ import sqlite3
 import pytest
 
 import db as db_module
+import logic
 
 
 @pytest.fixture
@@ -135,6 +136,80 @@ def test_decline_releases_only_that_competency(db):
     assert request_row(kept) == ('claimed', 'dmason')
 
 
+def test_decline_records_who_bumped_it(db):
+    """Declining stamps bumped_by with the TA, so the queue can flag it later."""
+    declined = add_request('500111111', 1)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, declined, 'dmason')
+        bumped_by = sql.execute(
+            'select bumped_by from requests where id = ?', (declined,)
+        ).fetchone()[0]
+    assert bumped_by == 'dmason'
+
+
+def test_queue_flags_students_you_bumped(db, monkeypatch):
+    """The by-student queue flags a student whose competency the viewing TA bumped,
+    and only for that TA (#24)."""
+    from datetime import date
+    import app as app_module
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))  # STUDIO
+    monkeypatch.setattr(logic, 'upcoming_studios', lambda *a, **k: [STUDIO])
+    rid = add_request('500111111', 1)                 # seat '12', dated STUDIO
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')        # dmason bumps it
+
+    def queue_as(username):
+        c = app_module.app.test_client()
+        with c.session_transaction() as s:
+            s['user'] = username
+            s['role'] = 'staff'
+        return c.get('/queue').get_data(as_text=True)
+
+    assert 'you bumped this student before' in queue_as('dmason')
+    assert 'you bumped this student before' not in queue_as('lfortune')
+
+
+def test_bumped_competency_follows_the_student(db, monkeypatch):
+    """A bumped competency moves to whatever session the student next shows up for."""
+    from datetime import date
+    import app as app_module
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 29))  # a Wednesday
+    rid = add_request('500111111', 1)                # dated STUDIO (Tue 2026-07-28)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')       # bumped on Tuesday
+    # The student shows up Wednesday and takes a seat.
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    c.post('/queue/seat', data={'seat': '5'})
+    with db.cursor() as sql:
+        moved = sql.execute(
+            'select studio_date from requests where id = ?', (rid,)
+        ).fetchone()[0]
+    assert moved == '2026-07-29'   # carried to Wednesday, the session they attended
+
+
+def test_student_sees_carried_over_for_a_bumped_competency(db, monkeypatch):
+    """The student's queue shows a bumped competency as carried over, not cancellable."""
+    from datetime import date
+    import app as app_module
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))  # STUDIO
+    rid = add_request('500111111', 1)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')   # bumped
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    body = c.get('/queue').get_data(as_text=True)
+    assert 'carried over' in body
+
+
 def test_declined_competency_is_claimable_by_another_ta(db):
     """Back to plain 'waiting' means someone else can genuinely pick it up."""
     declined = add_request('500111111', 1)
@@ -155,15 +230,17 @@ def test_decline_records_no_result(db):
     assert rows[0] == 0
 
 
-def test_decline_does_not_spend_a_daily_request(db):
-    """The row already existed, so going back on the list costs the student nothing."""
+def test_decline_frees_the_slot_it_used(db):
+    """A bumped competency stops counting against the cap, so the student is not
+    left down a slot for one a TA could not evaluate (Dave's no-penalty rule)."""
     declined = add_request('500111111', 1)
     with db.cursor() as sql:
         db.claim_student(sql, '500111111', 'dmason', STUDIO)
         before = db.requests_used_for_studio(sql, '500111111', STUDIO)
         db.release_request(sql, declined, 'dmason')
         after = db.requests_used_for_studio(sql, '500111111', STUDIO)
-    assert before == after == 1
+    assert before == 1
+    assert after == 0   # bumped -> no longer counts, the slot comes back
 
 
 def test_cannot_decline_another_tas_claim(db):
