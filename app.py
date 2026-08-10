@@ -7,6 +7,8 @@ level, and lets a test build a fresh app on demand.
 
 Run with:  flask --app app run --debug --port 8080
 """
+import os
+
 from flask import Flask
 
 from blueprints.auth import auth_bp
@@ -17,9 +19,12 @@ from blueprints.queue import queue_bp
 
 def create_app():
     app = Flask(__name__)
-    app.config['ENV'] = 'development'
-    # Dev-only secret so Flask can sign session cookies. Use a real secret in production.
-    app.secret_key = 'dev-only-change-me'
+    # 'development' locally (the interim /login page); set APP_ENV=production in the
+    # server environment to switch identity over to TMU CAS. See DEPLOYMENT.md.
+    app.config['ENV'] = os.environ.get('APP_ENV', 'development')
+    # Dev-only fallback secret so Flask can sign session cookies. In production set a real
+    # SECRET_KEY in the environment, so sessions survive restarts and aren't a known value.
+    app.secret_key = os.environ.get('SECRET_KEY', 'dev-only-change-me')
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)

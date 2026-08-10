@@ -106,3 +106,32 @@ def test_student_can_view_their_own_progress(db):
 def test_staff_can_view_any_student(db):
     resp = client_as('dmason', 'staff').get('/view/500222222')
     assert resp.status_code == 200
+
+
+# --- production identity comes from the TMU CAS header --------------------
+
+def test_identity_from_cas_resolves_staff_students_and_unknowns(db):
+    import common
+    assert common.identity_from_cas('dmason') == ('dmason', 'staff')       # admin key
+    assert common.identity_from_cas('500111111') == ('500111111', 'student')
+    assert common.identity_from_cas('nobody') == (None, None)              # unrecognized
+    assert common.identity_from_cas(None) == (None, None)                  # no header
+
+
+def test_production_reads_staff_identity_from_cas_header(db, monkeypatch):
+    """In production the Cas-User header (set by Apache) is the identity, not a session."""
+    import app as app_module
+    monkeypatch.setitem(app_module.app.config, 'ENV', 'production')
+    resp = app_module.app.test_client().post(
+        '/save/500111111/1/achieved', headers={'Cas-User': 'dmason'})
+    assert resp.status_code == 200
+    assert achievement_count() == 1
+
+
+def test_production_without_a_cas_header_is_anonymous(db, monkeypatch):
+    """No header means unauthenticated: they must not be able to act."""
+    import app as app_module
+    monkeypatch.setitem(app_module.app.config, 'ENV', 'production')
+    resp = app_module.app.test_client().post('/save/500111111/1/achieved')
+    assert resp.status_code == 403
+    assert achievement_count() == 0
