@@ -36,9 +36,6 @@ moving.
 - **~100 automated tests** cover the queue, the sign-up rules, attendance,
   shout-outs, enrollment, and the sign-in guards. They run in about a second
   (`python -m pytest tests/`).
-- **The trickiest part is handled safely:** two TAs can tap the same student at the
-  same moment, and only one ever gets them, so no two TAs walk to the same seat. It is
-  covered by tests.
 - **Every feature ships through a pull-request review** before merging, and an
   independent code review of the latest features came back with only minor issues, no
   real bugs.
@@ -106,15 +103,6 @@ each file has one clear job:
 A request flows: a **blueprint route** asks **`db.py`** for data and **`logic.py`**
 for rule answers, builds the page with **`myhtml.py`**, and returns the HTML.
 
-```mermaid
-flowchart LR
-    Browser([Browser]) -->|HTTP request| Route[Blueprint route<br/>auth / main / mark / queue]
-    Route -->|queries| DB[(db.py → SQLite)]
-    Route -->|"rules"| Logic[logic.py]
-    Route -->|builds page| MyHTML[myhtml.py]
-    MyHTML -->|HTML string| Browser
-```
-
 **Production:** runs under Apache via `mod_wsgi` with TMU CAS login. In development
 the login is a simple dev placeholder, so no Apache, CAS, or VPN is needed.
 
@@ -177,11 +165,6 @@ erDiagram
     }
 ```
 
-- **`students`, `competencies`** — the people, and the 40-per-course competencies.
-- **`achievements`** — one row per recorded result (Achieved or Not passed). No row
-  means "not assessed."
-- **`requests`** — the evaluation queue: one row per competency a student asks to be
-  evaluated on, flowing `waiting` → `claimed` → `done`.
-- **`enrollments`, `attendance`, `endorsements`** — who takes which course, who showed
-  up, and peer thank-yous.
-- **`settings`** — config such as the admin usernames and the per-session cap.
+`achievements` holds one row per recorded result (no row means "not assessed"), and
+`requests` is the evaluation queue. The rest link students to courses, attendance,
+and peer thank-yous.
