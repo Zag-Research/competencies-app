@@ -210,6 +210,86 @@ def test_student_sees_carried_over_for_a_bumped_competency(db, monkeypatch):
     assert 'carried over' in body
 
 
+def test_cannot_cancel_a_bumped_competency(db):
+    """A carried-over competency must survive a Cancel POST (e.g. from a stale tab
+    that still shows the button), or the #24 carry-over would be lost."""
+    import app as app_module
+    rid = add_request('500111111', 1)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')   # bumped
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    c.post('/queue/cancel/' + str(rid))
+    with db.cursor() as sql:
+        still_there = sql.execute(
+            'select count(*) from requests where id = ?', (rid,)
+        ).fetchone()[0]
+    assert still_there == 1   # the delete skipped it; the bump survived
+
+
+def test_a_plain_request_can_still_be_cancelled(db):
+    """The bumped guard must not break normal cancelling of an un-bumped request."""
+    import app as app_module
+    rid = add_request('500111111', 1)
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    c.post('/queue/cancel/' + str(rid))
+    with db.cursor() as sql:
+        gone = sql.execute(
+            'select count(*) from requests where id = ?', (rid,)
+        ).fetchone()[0]
+    assert gone == 0
+
+
+def test_checkin_carries_a_bumped_competency_forward(db, monkeypatch):
+    """Checking in (not just taking a seat) resurfaces a bumped competency, so a
+    student whose only pending item is the bumped one is not stranded (#19/#24)."""
+    from datetime import date
+    import app as app_module
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 29))  # a Wednesday
+    rid = add_request('500111111', 1)                # dated STUDIO (Tue 2026-07-28)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')       # bumped Tuesday
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    c.post('/queue/checkin')
+    with db.cursor() as sql:
+        moved = sql.execute(
+            'select studio_date from requests where id = ?', (rid,)
+        ).fetchone()[0]
+    assert moved == '2026-07-29'   # carried to Wednesday just by showing up
+
+
+def test_seat_on_a_non_studio_day_leaves_bumped_where_it_is(db, monkeypatch):
+    """A seat POST on a non-class day must not shove a bumped competency onto a date
+    no staff queue shows; carry-forward is guarded to studio days."""
+    from datetime import date
+    import app as app_module
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 8, 1))  # a Saturday
+    rid = add_request('500111111', 1)                # dated STUDIO (Tue 2026-07-28)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    c.post('/queue/seat', data={'seat': '5'})
+    with db.cursor() as sql:
+        where = sql.execute(
+            'select studio_date from requests where id = ?', (rid,)
+        ).fetchone()[0]
+    assert where == STUDIO   # unchanged; not dragged onto Saturday
+
+
 def test_declined_competency_is_claimable_by_another_ta(db):
     """Back to plain 'waiting' means someone else can genuinely pick it up."""
     declined = add_request('500111111', 1)

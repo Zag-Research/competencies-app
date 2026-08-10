@@ -110,3 +110,47 @@ def test_cannot_edge_past_balance_across_two_signups(db, monkeypatch):
     assert booked_count() == 1
     c.post('/queue/join', data={'competency_ids': ['2'], 'studio_date': STUDIO})
     assert booked_count() == 1   # second one rejected; still just the first
+
+
+def other_student_client(monkeypatch, number):
+    monkeypatch.setattr(logic, 'upcoming_studios', lambda *a, **k: [STUDIO])
+    import app as app_module
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = number
+        s['role'] = 'student'
+    return c
+
+
+def count_for(number):
+    with db_module.cursor() as sql:
+        return sql.execute(
+            "select count(*) from requests where student_number = ?", (number,)
+        ).fetchone()[0]
+
+
+def test_a_student_with_no_enrollment_row_is_still_balanced(db, monkeypatch):
+    # A student with no rows in enrollments is treated as taking every course by
+    # competencies_for, so the balance rule must still bite. If counts were seeded
+    # from enrollments (empty) instead, a 3-and-0 would slip through as one course.
+    with db_module.cursor() as sql:
+        sql.execute("insert into students values ('Nia', 'Roy', '500999999')")
+    other_student_client(monkeypatch, '500999999').post(
+        '/queue/join', data={'competency_ids': ['1', '2', '3'], 'studio_date': STUDIO})
+    assert count_for('500999999') == 0   # lopsided, so nothing is booked
+
+
+def test_single_course_student_hint_omits_the_balance_line(db, monkeypatch):
+    # A part-time student in one course should not read a rule about a second course.
+    with db_module.cursor() as sql:
+        sql.execute("insert into students values ('Sam', 'Lee', '500888888')")
+        sql.execute("insert into enrollments values ('500888888', 'CPS109')")
+    body = other_student_client(monkeypatch, '500888888').get('/queue').get_data(as_text=True)
+    assert 'Sign up' in body                    # the sign-up block did render
+    assert 'keep your two courses' not in body  # but without the balance wording
+
+
+def test_two_course_student_hint_keeps_the_balance_line(db, monkeypatch):
+    # Alice is in both courses, so she should still see the balance rule.
+    body = student_client(monkeypatch).get('/queue').get_data(as_text=True)
+    assert 'keep your two courses' in body

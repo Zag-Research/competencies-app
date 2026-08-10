@@ -147,11 +147,16 @@ def queue_student_view(student_number):
     bookable = [day for day in studios if remaining[day] > 0]
     if available and bookable:
         p += h2('Sign up')
-        p += div('Up to ' + str(db.daily_cap()) + ' competencies per studio '
-                 'session, and keep your two courses within 1 of each other '
-                 '(for example 2 of one and 1 of the other). Pick the session '
-                 'you want to be evaluated in: you can book ahead, not just for '
-                 'today.').classes('queue-allowance')
+        # The balance rule only applies to a student in more than one course, so the
+        # "keep your two courses within 1" line is shown only to them; a single-course
+        # student would otherwise read a rule about a course they are not taking (#11).
+        hint = 'Up to ' + str(db.daily_cap()) + ' competencies per studio session'
+        if len({course for (_cid, _name, course) in all_competencies}) > 1:
+            hint += (', and keep your two courses within 1 of each other '
+                     '(for example 2 of one and 1 of the other)')
+        hint += ('. Pick the session you want to be evaluated in: you can book '
+                 'ahead, not just for today.')
+        p += div(hint).classes('queue-allowance')
         f = form(method='post', action=url_for('queue.queue_join'))
         # Which session these competencies are for. Only sessions with room left
         # are offered, so a student cannot book into a full day and be silently
@@ -586,10 +591,14 @@ def queue_join():
                          for (cid, _n, course) in db.competencies_for(sql, user)}
             competency_ids = [c for c in competency_ids if c in course_of]
 
-            # The balance rule (#22) looks at the whole session. Start every enrolled
-            # course at 0 (so a lopsided "2 and 0" is caught), add what is already
-            # booked this session, then add the new picks.
-            counts = {course: 0 for course in db.enrolled_courses(sql, user)}
+            # The balance rule (#22) looks at the whole session. Start every course
+            # the student can pick from at 0 (so a lopsided "2 and 0" is caught), add
+            # what is already booked this session, then add the new picks. Seed from
+            # course_of (the courses competencies_for returned) rather than
+            # enrolled_courses: a student with no enrollment row is treated as taking
+            # every course by competencies_for, and this keeps the two in agreement so
+            # the rule can't be bypassed by picking all from one course.
+            counts = {course: 0 for course in set(course_of.values())}
             for (course, n) in db.session_course_counts(sql, user, studio_date):
                 counts[course] = counts.get(course, 0) + n
             for cid in competency_ids:
@@ -646,8 +655,10 @@ def queue_seat():
     with db.cursor() as sql:
         # Showing up (taking a seat) is what a bumped competency was waiting for:
         # pull the student's bumped competencies into today's session first, so the
-        # seat below lands on them too and they resurface for a TA (#19/#24).
-        if seat:
+        # seat below lands on them too and they resurface for a TA (#19/#24). Guarded
+        # by is_studio_day so a seat POST on a non-class day can't move a bumped
+        # competency onto a date no staff queue ever shows.
+        if seat and logic.is_studio_day(today):
             db.carry_bumped_forward(sql, user, today)
         db.set_seat(sql, user, seat or None, today)
         # Taking a seat is a stronger "I am here" than the check-in button, so it
@@ -676,6 +687,11 @@ def queue_checkin():
     if logic.is_studio_day(today):
         with db.cursor() as sql:
             db.mark_present(sql, user, today)
+            # Checking in is also "I'm here", so carry any bumped competencies into
+            # today too. Without this, a student whose only pending item is a bumped
+            # one never sees the seat form (it needs a request dated today), so this
+            # is their only way to resurface it (#19/#24).
+            db.carry_bumped_forward(sql, user, today)
         session['queue_notice'] = 'Checked in for today. Thanks for coming.'
     return redirect(url_for('queue.queue'))
 
@@ -688,8 +704,12 @@ def queue_cancel(request_id):
     with db.cursor() as sql:
         # Only a request nobody has taken yet. Once a TA has claimed it they are on
         # their way over, and cancelling would pull the student out from under them.
+        # bumped_by is null keeps a carried-over competency (#24) uncancellable: the
+        # student view already hides its Cancel button, but a stale tab loaded before
+        # the bump would still have one, and deleting it would drop the carry-over.
         sql.execute(
-            "delete from requests where id = ? and student_number = ? and status = 'waiting'",
+            "delete from requests where id = ? and student_number = ? "
+            "and status = 'waiting' and bumped_by is null",
             (request_id, user)
         )
     return redirect(url_for('queue.queue'))
