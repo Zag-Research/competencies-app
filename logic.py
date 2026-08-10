@@ -21,9 +21,10 @@ def achievement_state(competency_id, states):
 
 
 # Retry rule (decided June 15): after a "Not passed", a competency unlocks two
-# CALENDAR days later at 8 AM Toronto time (Tue fail -> Thu 8 AM). The hour of the
-# attempt does not matter, only its date. Display only for now: nothing blocks an
-# early re-mark yet (whether to enforce is pending Dave, issue #1).
+# CALENDAR days later at 8 AM Toronto time (Tue fail -> Thu 8 AM). If that lands on
+# a non-studio day it rolls forward to the next studio day (#25): a Friday fail would
+# otherwise read "retry Sunday 8 AM", but the soonest they could actually retry is the
+# next session anyway. The hour of the attempt does not matter, only its date.
 TORONTO = ZoneInfo("America/Toronto")
 RETRY_DAYS = 2
 RETRY_HOUR = 8
@@ -48,7 +49,10 @@ def retry_unlock(date_recorded):
     if recorded is None:
         return None
     local = recorded.astimezone(TORONTO)
-    unlock_day = local.date() + timedelta(days=RETRY_DAYS)
+    # +2 calendar days, then roll forward to the next studio day if that is a
+    # weekend or Monday (#25). studio_on_or_after is defined below; it resolves at
+    # call time, so the forward reference is fine.
+    unlock_day = studio_on_or_after(local.date() + timedelta(days=RETRY_DAYS))
     return datetime(unlock_day.year, unlock_day.month, unlock_day.day,
                     RETRY_HOUR, 0, tzinfo=TORONTO)
 
@@ -95,6 +99,13 @@ def is_studio_day(iso_date):
         return date.fromisoformat(iso_date).weekday() in STUDIO_WEEKDAYS
     except (TypeError, ValueError):
         return False
+
+
+def studio_on_or_after(day):
+    """The first studio day on or after `day` (returns `day` unchanged if it is one)."""
+    while day.weekday() not in STUDIO_WEEKDAYS:
+        day += timedelta(days=1)
+    return day
 
 
 def upcoming_studios(count=STUDIO_LOOKAHEAD, today=None):

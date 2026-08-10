@@ -585,11 +585,14 @@ def queue_join():
     today = logic.today_toronto().isoformat()
     if competency_ids:
         with db.cursor() as sql:
-            # Only competencies in the student's enrolled courses (#11); a
-            # hand-crafted POST must not book another course's competency.
+            # Only competencies in the student's enrolled courses (#11), and not ones
+            # already passed; a hand-crafted POST must not book another course's
+            # competency or re-request one that is already achieved.
             course_of = {str(cid): course
                          for (cid, _n, course) in db.competencies_for(sql, user)}
-            competency_ids = [c for c in competency_ids if c in course_of]
+            achieved = db.achieved_competency_ids(sql, user)
+            competency_ids = [c for c in competency_ids
+                              if c in course_of and int(c) not in achieved]
 
             # The balance rule (#22) looks at the whole session. Start every course
             # the student can pick from at 0 (so a lopsided "2 and 0" is caught), add
@@ -598,7 +601,15 @@ def queue_join():
             # enrolled_courses: a student with no enrollment row is treated as taking
             # every course by competencies_for, and this keeps the two in agreement so
             # the rule can't be bypassed by picking all from one course.
-            counts = {course: 0 for course in set(course_of.values())}
+            #
+            # But drop a course the student has already finished (every competency in
+            # it achieved): the balance should not throttle their remaining course to
+            # 1-per-session just because a completed course sits at 0 (#26).
+            comps_by_course = {}
+            for (cid_str, course) in course_of.items():
+                comps_by_course.setdefault(course, []).append(int(cid_str))
+            counts = {course: 0 for (course, cids) in comps_by_course.items()
+                      if any(cid not in achieved for cid in cids)}
             for (course, n) in db.session_course_counts(sql, user, studio_date):
                 counts[course] = counts.get(course, 0) + n
             for cid in competency_ids:

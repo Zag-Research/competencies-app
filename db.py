@@ -344,6 +344,20 @@ def competencies_for(sql, student_number):
     ).fetchall()
 
 
+def achieved_competency_ids(sql, student_number):
+    """The set of competency ids this student has already passed (status 'achieved').
+
+    Used by the balance rule to spot a course the student has finished, and to stop a
+    hand-crafted sign-up re-requesting something already passed.
+    """
+    rows = sql.execute(
+        "select competency_id from achievements "
+        "where student_number = ? and status = 'achieved'",
+        (student_number,)
+    ).fetchall()
+    return {row[0] for row in rows}
+
+
 def mark_present(sql, student_number, day):
     # Record that a student showed up for one studio session. Idempotent: the
     # (student, day) primary key means a second check-in the same day is ignored,
