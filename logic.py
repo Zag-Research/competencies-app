@@ -80,12 +80,26 @@ def cooling_off_label(date_recorded):
 # Wednesday 3-6 PM, Thursday 9 AM-12 PM. Python's weekday() has Monday at 0, so
 # those are 1, 2 and 3.
 #
-# These are derived from the weekly pattern rather than read from a table of term
-# dates, because the Fall 2026 calendar is not settled. The cost is that this
-# cannot know about holidays or reading week, so it may offer a day that does not
-# actually run. Replace with a seeded studios table once the real dates exist.
+# These come from the weekly pattern rather than a full term calendar. Statutory
+# holidays need no special handling: across both the Fall 2026 and Winter 2027 terms
+# they all fall on Mondays or Fridays, off the studio's days. The reading weeks DO land
+# on studio days, so they are listed below and skipped. (Term start/end are not enforced
+# yet, so an out-of-term Tue/Wed/Thu is still offered; harmless because the studio is not
+# in use then. Load real term ranges here if that ever matters.)
 STUDIO_WEEKDAYS = (1, 2, 3)
 STUDIO_LOOKAHEAD = 6
+
+# University reading weeks (TMU 2026-2027 calendar): the studio does not run on these
+# days even though they are Tue/Wed/Thu, because the lab is closed and classes are off.
+STUDIO_BREAKS = (
+    (date(2026, 10, 13), date(2026, 10, 16)),  # Fall study week
+    (date(2027, 2, 16), date(2027, 2, 19)),    # Winter study week
+)
+
+
+def in_studio_break(day):
+    """True if `day` (a date) falls in a reading week, when the studio is closed."""
+    return any(start <= day <= end for (start, end) in STUDIO_BREAKS)
 
 
 def today_toronto():
@@ -96,14 +110,15 @@ def today_toronto():
 
 def is_studio_day(iso_date):
     try:
-        return date.fromisoformat(iso_date).weekday() in STUDIO_WEEKDAYS
+        d = date.fromisoformat(iso_date)
     except (TypeError, ValueError):
         return False
+    return d.weekday() in STUDIO_WEEKDAYS and not in_studio_break(d)
 
 
 def studio_on_or_after(day):
     """The first studio day on or after `day` (returns `day` unchanged if it is one)."""
-    while day.weekday() not in STUDIO_WEEKDAYS:
+    while day.weekday() not in STUDIO_WEEKDAYS or in_studio_break(day):
         day += timedelta(days=1)
     return day
 
@@ -113,7 +128,7 @@ def upcoming_studios(count=STUDIO_LOOKAHEAD, today=None):
     day = today or today_toronto()
     out = []
     while len(out) < count:
-        if day.weekday() in STUDIO_WEEKDAYS:
+        if day.weekday() in STUDIO_WEEKDAYS and not in_studio_break(day):
             out.append(day.isoformat())
         day += timedelta(days=1)
     return out
