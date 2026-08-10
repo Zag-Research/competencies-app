@@ -1,7 +1,17 @@
 # Competencies App
 
-A Flask web app for tracking student competencies for the CPS109 Python programming course at TMU in Fall 2026.
-Students demonstrate competencies in lab; instructors and TAs record them in real time. No lectures, assignments, or exams.
+A Flask web app for a competency-based studio at TMU (Fall 2026) that runs two
+first-year courses together: **CPS109** (Python) and **CPS213** (digital logic).
+There are no lectures, assignments, or exams. Instead, students demonstrate
+competencies one-on-one to a TA in the lab, and the app coordinates that: students
+sign up for what they are ready to show, TAs work a live queue, and results are
+recorded in real time.
+
+Each course has 40 competencies. A few rules keep the studio fair and moving:
+students may request only a few per session (a cap), must keep progress on both
+courses roughly balanced (the [balance rule](#the-balance-rule)), and a competency
+a TA cannot get to is carried over rather than lost (see
+[deferred competencies](#deferred-carried-over-competencies)).
 
 ## Quick start
 
@@ -43,45 +53,44 @@ on `/login`, type one of the seeded usernames:
 Sign several students up for the same competency to see the by-competency cohort
 view do something interesting.
 
+**Run the tests.** From the repo root with the venv active:
+
+```
+python -m pytest tests/
+```
+
+The suite (~90 tests) covers the queue and the two-TA claiming race, the balance
+rule, deferred competencies, attendance, peer shout-outs, per-course enrollment,
+and the auth guards.
+
 ## What it does
 
-After signing in (`/login`), staff land on the evaluation queue and students on
-their own progress page. The main pages:
+After signing in (`/login`), staff land on the evaluation queue, students on their
+own progress page. The pages:
 
-- **Home** (`/`): roster of students, each linking to mark or view them.
-- **Staff view** (`/mark/<student_number>`): three buttons per competency (Not
-  assessed / Achieved / Not passed). One tap sets the state and saves, no save
-  button. Any TA or instructor can mark any student.
-- **Student view** (`/view/<student_number>`): read-only progress, each
-  competency shown as a colored status pill.
-- **Evaluation queue** (`/queue`): the lab coordination layer.
-  - *Students* sign up for the competencies they want evaluated today; they can
-    cancel their own requests. Only competencies they can actually attempt appear
-    (not assessed, or past their retry window), capped at a configurable number of
-    requests per day.
+- **Home** (`/`) — the student roster (staff), a Mark and a View link per student.
+- **Progress** (`/view/<student_number>`) — read-only competency status, grouped by
+  course. A student sees only their own.
+- **Marking** (`/mark/<student_number>`, staff only) — one tap per competency sets
+  Achieved / Not passed / Not assessed and saves.
+- **Evaluation queue** (`/queue`) — the live lab coordination:
+  - **Students** sign up for the competencies they want evaluated (only ones they
+    can attempt, from their enrolled courses, within the
+    [session limits](#the-balance-rule)), enter a **seat** when they arrive (which
+    is what puts them in front of staff), and **check in** for
+    [attendance](#attendance). They can also
+    [book ahead](#studio-sessions-and-advance-scheduling) for a future session.
+  - **Staff** work the waiting students, longest-waiting first, grouped **by
+    student** or **by competency** (toggle at the top). Claiming a card takes that
+    student (or a whole competency cohort) and opens the screen to mark each one
+    **Achieved / Not passed / Can't evaluate** (which
+    [defers it](#deferred-carried-over-competencies)). Marking is one tap, with an
+    **Undo**; a student can be **released** back to the queue.
 
-    Sign-up asks for **no seat number**, because students sign up before they get
-    to the lab (from home, on the way in) and seats are not assigned: you take
-    whichever machine is free. They enter a seat once they are actually sitting
-    down, and **that is what makes them visible to staff**. A request with no seat
-    is a plan, not a person a TA can walk over to, so the staff queue does not list
-    it. Leaving the lab clears the seat, which drops them off the staff queue
-    without cancelling what they signed up for.
-  - *Staff* see the waiting students, longest-waiting first, in one of two
-    groupings (toggle at the top of the queue):
-    - **By student** (`/queue?group=student`): one card per student, listing the
-      competencies they asked for. Tapping the card **claims** them and opens
-      their evaluation screen (`/queue/student/<student_number>`), which lists
-      only what they requested, each with Achieved / Not passed.
-    - **By competency** (`/queue?group=competency`): one card per competency,
-      listing everyone waiting on it. Tapping it claims the whole cohort and
-      opens `/queue/competency/<id>`, where the TA marks each student on that
-      one competency. This is a **TA worklist, not a group session**: the point
-      is that marking a cohort back to back applies one consistent standard,
-      rather than the bar drifting as you jump between competencies. (If students
-      gathered to be evaluated together they could copy the previous answer.)
-  - Marking records the result and clears the request in one tap, with a one-shot
-    **Undo**. A TA can also **Release** a student (or cohort) back to the queue.
+The by-competency grouping is a **TA worklist, not a group session**: marking a
+cohort back to back holds one consistent standard (and students cannot copy each
+other). The subtler mechanics, two TAs never colliding on one student, and seats
+gating who is visible, are next.
 
 ### Queue claiming
 
@@ -130,10 +139,62 @@ mis-tap while standing at the student's desk should not fling them back into the
 global queue for someone else to pick up.
 
 That `seat is not null` at the top of the predicate is the "is the student actually
-here?" check (see above). It lives in `db.AVAILABLE`, which is used both to list the
-queue and to guard the claim, so the two can never disagree about who is free. A
-student who has not sat down cannot be listed *or* claimed, and a TA never walks
-over to an empty chair.
+here?" check: a student who has not taken a seat cannot be listed *or* claimed, so a
+TA never walks over to an empty chair.
+
+## Studio sessions and advance scheduling
+
+The studio meets three times a week (Tuesday, Wednesday, Thursday). A sign-up is
+for a specific **studio session**, not just "today": a student can book ahead, and
+each request carries the `studio_date` it is for. The staff queue defaults to
+today's live, claimable session; a TA can switch to a future day to see a read-only
+**planning roster** of who has booked it. Studio days come from the weekly pattern
+in `logic.py` (no term calendar yet).
+
+## The balance rule
+
+Each session, a student may sign up for at most a few competencies (the cap,
+default **3**, a `settings` value Dave can change without touching code), and their
+two courses must stay **within 1 of each other**: 2 of one course and 1 of the
+other is fine, but 3 and 0 is not. This keeps students moving through both CPS109
+and CPS213 rather than bingeing one. A sign-up that breaks the cap or the balance is
+**rejected whole**, with a message explaining why. The rule is a pure function
+(`logic.session_signup_ok`) checked against the session's per-course tally
+(`db.session_course_counts`) in `queue_join`.
+
+## Deferred, carried-over competencies
+
+A TA who is not prepared to evaluate a competency taps **"Can't evaluate"** on it.
+Rather than failing the student, the competency is *bumped*: it returns to the queue
+tagged with the TA who bumped it (`bumped_by`). Three things follow:
+
+- The by-student queue **flags a student that TA previously bumped**, so they can
+  pick it back up once prepped, or steer clear.
+- The bumped competency **waits for the student**: when they next take a seat it
+  follows them to that session (`db.carry_bumped_forward`), so it is never stranded
+  on a day they do not return.
+- It **does not count against the student's cap or balance**, and the student sees
+  it as "carried over", not failed.
+
+## Attendance
+
+Students check in each session ("I'm here today"), recorded in `attendance`
+(`student_number`, `day`); taking a seat marks attendance too. Staff get an
+attendance view (sessions attended per student) for the instructor's
+miss-more-than-half rule. Check-ins only count on real class days.
+
+## Peer shout-outs
+
+A student can thank a classmate who helped them, from a dropdown on their own
+progress page (`endorsements`). Staff see a received-count tally the instructor
+folds into course remarks. One thank-you per classmate per day, enforced by the
+table's primary key.
+
+## Per-course enrollment
+
+`enrollments` links a student to the courses they take, and students only see and
+sign up for their enrolled courses' competencies. Most first-years take both
+courses; a part-time student in one course sees only that one.
 
 ## Competency states
 
@@ -162,9 +223,10 @@ competency unlocks **two calendar days later at 8 AM Toronto time** (a Tuesday f
 unlocks Thursday 8 AM). Only the date of the attempt matters, not the hour. The
 stored UTC timestamp is converted to `America/Toronto` first, so 8 AM is local and
 the EST/EDT switch is handled automatically. The student view shows "Available to
-retry &lt;day&gt; 8 AM", computed live from `date_recorded`. It is display only:
-nothing yet blocks an early re-attempt during the window (whether to enforce that
-is pending Dave's call, issue #1).
+retry &lt;day&gt; 8 AM", computed live from `date_recorded`. The queue enforces the
+window: a cooling-off competency does not reappear in the student's sign-up list
+until it passes. (A staff re-mark is not hard-blocked, but a student cannot
+re-request early.)
 
 ## Architecture
 
@@ -179,8 +241,8 @@ each file has one reason to change:
 | `blueprints/mark.py` | staff marking page (`/mark/...`) and per-tap save. |
 | `blueprints/queue.py` | the evaluation queue (sign-up + staff marking). |
 | `common.py` | helpers shared across blueprints: `current_user`, `userCas`, `page_header`. |
-| `logic.py` | pure rules: states, the retry/cooldown math, timestamp parsing. No Flask/DB/HTML. |
-| `db.py` | data access: the `db.cursor()` context manager plus settings/role lookups. |
+| `logic.py` | pure rules: competency states, the retry cooldown, studio sessions, and the sign-up balance rule. No Flask/DB/HTML. |
+| `db.py` | all data access: the `db.cursor()` context manager and every query, claiming, attendance, enrollment, endorsements. |
 | `myhtml.py` | HTML elements as Python classes; `str()` recurses to emit markup. |
 
 - **Blueprints** group related routes into their own module, then get registered
@@ -228,6 +290,9 @@ erDiagram
     competencies ||--o{ achievements : "has"
     students ||--o{ requests : "queues"
     competencies ||--o{ requests : "queued for"
+    students ||--o{ enrollments : "enrolled in"
+    students ||--o{ attendance : "present at"
+    students ||--o{ endorsements : "gives / gets"
     students {
         TEXT student_number PK
         TEXT first_name
@@ -237,6 +302,7 @@ erDiagram
         INTEGER id PK
         TEXT name
         TEXT description
+        TEXT course
     }
     achievements {
         TEXT student_number FK
@@ -253,6 +319,21 @@ erDiagram
         TEXT status
         TEXT claimed_by
         TEXT claimed_at
+        TEXT studio_date
+        TEXT bumped_by
+    }
+    enrollments {
+        TEXT student_number FK
+        TEXT course
+    }
+    attendance {
+        TEXT student_number FK
+        TEXT day
+    }
+    endorsements {
+        TEXT from_student FK
+        TEXT to_student FK
+        TEXT day
     }
     settings {
         TEXT key PK
@@ -264,8 +345,10 @@ A row in `achievements` exists only for a recorded event; `status` is
 `'achieved'` or `'cooling_off'`, and "not assessed" is the *absence* of a row
 (derived at read time). `date_recorded` is a full timestamp, so the cooldown is a
 single elapsed-time comparison. The composite primary key is (`student_number`,
-`competency_id`). `settings` holds config such as admin usernames and the daily
-request cap.
+`competency_id`). Competencies carry a `course` (CPS109 or CPS213). `settings`
+holds config such as admin usernames and the per-session request cap. The
+`enrollments`, `attendance`, and `endorsements` tables are each covered in their
+feature sections above.
 
 `requests` is the evaluation queue: one row per competency a student asks to be
 evaluated on. `status` flows `'waiting'` → `'claimed'` → `'done'`:

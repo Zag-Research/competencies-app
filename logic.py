@@ -120,3 +120,21 @@ def studio_label(iso_date):
     except (TypeError, ValueError):
         return iso_date
     return d.strftime('%A, %B ') + str(d.day)
+
+
+# Sign-up limits per studio session (#22). Two rules at once:
+#   - at most `cap` competencies in the session, and
+#   - the two courses no more than 1 apart, so a student makes progress on both
+#     instead of bingeing one (2 of one and 1 of the other is fine; 3 and 0 is not).
+#
+# `course_counts` is {course: how many signed up this session}, and MUST include a
+# 0 for a course the student takes but has not picked, or a lopsided "2 and 0"
+# would look balanced. A student in a single course has one entry, so max == min
+# and only the cap applies.
+def session_signup_ok(course_counts, cap):
+    counts = list(course_counts.values())
+    if sum(counts) > cap:
+        return False
+    if counts and max(counts) - min(counts) > 1:
+        return False
+    return True
