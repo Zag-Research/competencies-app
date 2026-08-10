@@ -22,6 +22,26 @@ def test_studio_days_are_tue_wed_thu():
     assert runs['2026-07-31'] is False  # Friday
 
 
+def test_studio_on_or_after_rounds_forward_to_a_studio_day():
+    assert logic.studio_on_or_after(date(2026, 8, 2)) == date(2026, 8, 4)   # Sun -> Tue
+    assert logic.studio_on_or_after(date(2026, 7, 28)) == date(2026, 7, 28)  # Tue -> Tue
+
+
+def test_retry_unlock_rolls_a_weekend_forward_to_the_next_studio_day():
+    # Fail Friday 2026-07-31: +2 calendar days lands on Sunday, which is not a studio
+    # day, so it rolls forward to the next studio day, Tuesday 2026-08-04 at 8 AM (#25).
+    unlock = logic.retry_unlock('2026-07-31 12:00:00')
+    assert unlock.date() == date(2026, 8, 4)                       # Tuesday
+    assert logic.is_studio_day(unlock.date().isoformat()) is True
+    assert unlock.hour == 8
+
+
+def test_retry_unlock_leaves_a_studio_day_alone():
+    # Fail Tuesday 2026-07-28: +2 = Thursday, already a studio day, so no rounding.
+    unlock = logic.retry_unlock('2026-07-28 12:00:00')
+    assert unlock.date() == date(2026, 7, 30)                      # Thursday, unchanged
+
+
 def test_upcoming_studios_from_a_monday_lists_the_week():
     got = logic.upcoming_studios(count=3, today=date(2026, 7, 27))
     assert got == ['2026-07-28', '2026-07-29', '2026-07-30']

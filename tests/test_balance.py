@@ -154,3 +154,17 @@ def test_two_course_student_hint_keeps_the_balance_line(db, monkeypatch):
     # Alice is in both courses, so she should still see the balance rule.
     body = student_client(monkeypatch).get('/queue').get_data(as_text=True)
     assert 'keep your two courses' in body
+
+
+def test_a_finished_course_drops_out_of_the_balance(db, monkeypatch):
+    # Alice has passed all of CPS213 (ids 4, 5, 6). With that course finished, the
+    # balance rule should no longer throttle her: she can do up to the cap in the
+    # course she has left (3 of CPS109), instead of being held to 1 (#26).
+    with db_module.cursor() as sql:
+        for cid in (4, 5, 6):
+            sql.execute(
+                "insert into achievements (student_number, competency_id, status, date_recorded)"
+                " values ('500111111', ?, 'achieved', CURRENT_TIMESTAMP)", (cid,))
+    student_client(monkeypatch).post(
+        '/queue/join', data={'competency_ids': ['1', '2', '3'], 'studio_date': STUDIO})
+    assert booked_count() == 3   # all three CPS109, no balance throttle
