@@ -106,8 +106,10 @@ CREATE TABLE enrollments (
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 INSERT INTO settings VALUES('admins','dmason lfortune');
 INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
--- max competencies a student may request per day (Dave to confirm exact number)
-INSERT INTO settings VALUES('daily_cap','6');
+-- max competencies a student may request per studio session (#22). Dave: start
+-- at 3 (students finish ~week 9), may bump to 4 later. A setting, so changing it
+-- is one row update, not a code change.
+INSERT INTO settings VALUES('daily_cap','3');
 -- a claim this old is treated as abandoned, and the student returns to the queue.
 -- Covers the TA who claims a student and then closes their laptop: without this,
 -- that student is invisible to every TA forever.

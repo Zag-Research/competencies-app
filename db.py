@@ -39,9 +39,10 @@ def get_setting(key, default=None):
     return row[0] if row else default
 
 
-# How many competencies a student may request in one day. Dave to confirm the
-# exact number (~5-6); stored in settings so it is a config change, not a code one.
-DEFAULT_DAILY_CAP = 6
+# How many competencies a student may request per studio session (#22). Dave chose
+# 3 to start (may bump to 4 later); stored in settings so it is a config change,
+# not a code one. This value is only a fallback if the setting row is missing.
+DEFAULT_DAILY_CAP = 3
 
 
 def daily_cap():
@@ -222,6 +223,23 @@ def requests_used_for_studio(sql, student_number, studio_date):
         (student_number, studio_date)
     ).fetchone()
     return row[0] if row else 0
+
+
+def session_course_counts(sql, student_number, studio_date):
+    """How many requests the student already has this session, per course.
+
+    Feeds the balance rule (#22): the new picks are added to these existing counts
+    and the whole session is checked against the cap-and-1-apart rule. Counts all
+    statuses (waiting/claimed/done), because a competency already evaluated this
+    session still counts toward that session's balance. Returns [(course, count)].
+    """
+    return sql.execute(
+        """select c.course, count(*) from requests r
+             join competencies c on r.competency_id = c.id
+            where r.student_number = ? and r.studio_date = ?
+            group by c.course""",
+        (student_number, studio_date)
+    ).fetchall()
 
 
 # --- peer helpfulness (endorsements) ------------------------------------

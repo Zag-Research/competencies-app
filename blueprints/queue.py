@@ -142,8 +142,10 @@ def queue_student_view(student_number):
     if available and bookable:
         p += h2('Sign up')
         p += div('Up to ' + str(db.daily_cap()) + ' competencies per studio '
-                 'session. Pick the session you want to be evaluated in: you can '
-                 'book ahead, not just for today.').classes('queue-allowance')
+                 'session, and keep your two courses within 1 of each other '
+                 '(for example 2 of one and 1 of the other). Pick the session '
+                 'you want to be evaluated in: you can book ahead, not just for '
+                 'today.').classes('queue-allowance')
         f = form(method='post', action=url_for('queue.queue_join'))
         # Which session these competencies are for. Only sessions with room left
         # are offered, so a student cannot book into a full day and be silently
@@ -563,14 +565,37 @@ def queue_join():
     today = logic.today_toronto().isoformat()
     if competency_ids:
         with db.cursor() as sql:
-            # Only competencies in the student's enrolled courses (#11). The sign-up
-            # UI already hides the others, but a hand-crafted POST must not book a
-            # competency from a course they are not taking.
-            allowed = {str(cid) for (cid, _n, _c) in db.competencies_for(sql, user)}
-            competency_ids = [c for c in competency_ids if c in allowed]
-            # A seat only means "I am here now", so only a booking for today can
-            # inherit today's seat. A future booking starts seatless: the student
-            # enters a seat when they actually arrive for that session.
+            # Only competencies in the student's enrolled courses (#11); a
+            # hand-crafted POST must not book another course's competency.
+            course_of = {str(cid): course
+                         for (cid, _n, course) in db.competencies_for(sql, user)}
+            competency_ids = [c for c in competency_ids if c in course_of]
+
+            # The balance rule (#22) looks at the whole session. Start every enrolled
+            # course at 0 (so a lopsided "2 and 0" is caught), add what is already
+            # booked this session, then add the new picks.
+            counts = {course: 0 for course in db.enrolled_courses(sql, user)}
+            for (course, n) in db.session_course_counts(sql, user, studio_date):
+                counts[course] = counts.get(course, 0) + n
+            for cid in competency_ids:
+                counts[course_of[cid]] = counts.get(course_of[cid], 0) + 1
+
+            cap = db.daily_cap()
+            if competency_ids and not logic.session_signup_ok(counts, cap):
+                # Reject the whole sign-up and say why; nothing is inserted.
+                if sum(counts.values()) > cap:
+                    session['queue_notice'] = (
+                        'That is more than the ' + str(cap) + ' competencies you can '
+                        'sign up for in one session. Pick fewer.')
+                else:
+                    session['queue_notice'] = (
+                        'Keep your two courses within 1 of each other this session, '
+                        'for example 2 of one and 1 of the other, not 3 and 0. '
+                        'Adjust your picks and try again.')
+                return redirect(url_for('queue.queue'))
+
+            # Passed. A seat only means "I am here now", so only a booking for today
+            # inherits today's seat; a future booking starts seatless.
             seat = None
             if studio_date == today:
                 row = sql.execute(
@@ -582,24 +607,13 @@ def queue_join():
                     (user, today)
                 ).fetchone()
                 seat = row[0] if row else None
-            # Enforce the per-session cap: only insert up to what is left for that
-            # session, dropping any extras selected past the limit.
-            remaining = db.daily_cap() - db.requests_used_for_studio(sql, user, studio_date)
-            to_add = competency_ids[:remaining] if remaining > 0 else []
-            for cid in to_add:
+            for cid in competency_ids:
                 sql.execute(
                     """insert into requests
                            (student_number, competency_id, seat, requested_at, status, studio_date)
                        values (?, ?, ?, CURRENT_TIMESTAMP, 'waiting', ?)""",
                     (user, cid, seat, studio_date)
                 )
-        skipped = len(competency_ids) - len(to_add)
-        if skipped > 0:
-            session['queue_notice'] = (
-                'Limit is ' + str(db.daily_cap()) + ' competencies per session. '
-                + str(skipped) + ' of your selections were not added to '
-                + logic.studio_label(studio_date) + '.'
-            )
     return redirect(url_for('queue.queue'))
 
 
