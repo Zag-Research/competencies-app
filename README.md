@@ -59,7 +59,7 @@ view do something interesting.
 python -m pytest tests/
 ```
 
-The suite (~90 tests) covers the queue and the two-TA claiming race, the balance
+The suite (~100 tests) covers the queue and the two-TA claiming race, the balance
 rule, deferred competencies, attendance, peer shout-outs, per-course enrollment,
 and the auth guards.
 
@@ -157,8 +157,10 @@ Each session, a student may sign up for at most a few competencies (the cap,
 default **3**, a `settings` value Dave can change without touching code), and their
 two courses must stay **within 1 of each other**: 2 of one course and 1 of the
 other is fine, but 3 and 0 is not. This keeps students moving through both CPS109
-and CPS213 rather than bingeing one. A sign-up that breaks the cap or the balance is
-**rejected whole**, with a message explaining why. The rule is a pure function
+and CPS213 rather than bingeing one. A course the student has already finished (every
+competency achieved) drops out of the check, so a completed course never throttles the
+one they still have left. A sign-up that breaks the cap or the balance is **rejected
+whole**, with a message explaining why. The rule is a pure function
 (`logic.session_signup_ok`) checked against the session's per-course tally
 (`db.session_course_counts`) in `queue_join`.
 
@@ -219,8 +221,10 @@ stateDiagram-v2
 ```
 
 This cooldown spaces out re-attempts. The rule (decided June 15): a "Not passed"
-competency unlocks **two calendar days later at 8 AM Toronto time** (a Tuesday fail
-unlocks Thursday 8 AM). Only the date of the attempt matters, not the hour. The
+competency unlocks **two calendar days later at 8 AM Toronto time**, rolled forward to
+the next studio day if that lands on a non-class day (a Tuesday fail unlocks Thursday
+8 AM; a Friday fail rolls past the weekend to the next Tuesday). Only the date of the
+attempt matters, not the hour. The
 stored UTC timestamp is converted to `America/Toronto` first, so 8 AM is local and
 the EST/EDT switch is handled automatically. The student view shows "Available to
 retry &lt;day&gt; 8 AM", computed live from `date_recorded`. The queue enforces the
