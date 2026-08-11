@@ -59,7 +59,9 @@ def view_student(student_number=None):
         first, last = student
         p += h1('Progress: ' + first + ' ' + last)
         nav = div().classes('subnav')
-        nav += a('← Back to students', href=url_for('main.index')).classes('back-link')
+        # Only staff have a roster to go back to; a student on their own page does not.
+        if cur_role == 'staff':
+            nav += a('← Back to students', href=url_for('main.index')).classes('back-link')
         if cur_role == 'student' and cur_user == student_number:
             nav += a('Sign up to be evaluated →', href=url_for('queue.queue'))
         p += nav
