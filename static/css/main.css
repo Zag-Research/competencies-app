@@ -176,6 +176,21 @@ h1 {
     cursor: pointer;
     border-bottom: 1px solid #ececec;
 }
+/* Course section header in the sign-up list: makes CPS109 and CPS213 read as distinct
+   labelled groups instead of blending in, and sticks to the top of the screen so you
+   always know which course you are scrolling through. */
+.queue-course {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-weight: 700;
+    font-size: 1.02rem;
+    margin: 1.1rem 0 0.2rem;
+    padding: 0.45rem 0.6rem;
+    background: #eef1f5;
+    border-radius: 6px;
+    color: #1c2333;
+}
 .queue-row {
     display: flex;
     align-items: center;
