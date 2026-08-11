@@ -377,6 +377,22 @@ def achievement_states(sql, student_number):
     return states, recorded_at
 
 
+def pending_competencies(sql, student_number):
+    """Competency ids the student currently has in the queue, mapped to how they got
+    there: 'carried_over' (a bumped request) or 'in_queue' (a normal sign-up).
+
+    Lets the progress page show that a competency is queued, instead of it looking
+    identical to a never-attempted 'not assessed'.
+    """
+    rows = sql.execute(
+        "select competency_id, bumped_by from requests "
+        "where student_number = ? and status in ('waiting', 'claimed')",
+        (student_number,)
+    ).fetchall()
+    return {cid: ('carried_over' if bumped_by else 'in_queue')
+            for (cid, bumped_by) in rows}
+
+
 def mark_present(sql, student_number, day):
     # Record that a student showed up for one studio session. Idempotent: the
     # (student, day) primary key means a second check-in the same day is ignored,

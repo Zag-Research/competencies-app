@@ -95,6 +95,16 @@ h1 {
     background: #eceef1;
     color: #5f6571;
 }
+/* Queue status shown on the progress page: signed up and waiting, or carried over
+   after a TA could not get to it. */
+.state-in_queue {
+    background: #e7eef9;
+    color: #1a5fb4;
+}
+.state-carried_over {
+    background: #fdf0d5;
+    color: #8a5a00;
+}
 
 /* One competency: label on top, segmented buttons full-width below. */
 .mark-row {

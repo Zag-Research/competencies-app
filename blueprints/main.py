@@ -66,6 +66,9 @@ def view_student(student_number=None):
             nav += a('Sign up to be evaluated →', href=url_for('queue.queue'))
         p += nav
         states, recorded_at = db.achievement_states(sql, student_number)
+        # Competencies currently in the queue, so the progress page can show "in the
+        # queue" / "carried over" instead of a bare "not assessed".
+        pending = db.pending_competencies(sql, student_number)
         # Only this student's enrolled courses (#11): a part-time student in CPS109
         # sees 40 competencies, not all 80.
         comps = db.competencies_for(sql, student_number)
@@ -97,14 +100,19 @@ def view_student(student_number=None):
             if course != current_course:
                 p += h2(course or 'Other')
                 current_course = course
-            state = logic.achievement_state(cid, states)
-            if state == 'cooling_off':
-                state_label = logic.cooling_off_label(recorded_at.get(cid))
+            # A queued competency shows its queue status; otherwise its recorded state.
+            if cid in pending:
+                badge = pending[cid]  # 'carried_over' or 'in_queue'
+                state_label = 'Carried over' if badge == 'carried_over' else 'In the queue'
             else:
-                state_label = logic.STATE_LABELS[state]
+                badge = logic.achievement_state(cid, states)
+                if badge == 'cooling_off':
+                    state_label = logic.cooling_off_label(recorded_at.get(cid))
+                else:
+                    state_label = logic.STATE_LABELS[badge]
             p += div(
                 span(name).classes('progress-name'),
-                span(state_label).classes('progress-badge').addClasses('state-' + state),
+                span(state_label).classes('progress-badge').addClasses('state-' + badge),
             ).classes('progress-row')
         # Only the student themselves, looking at their own page, can thank a
         # classmate. Staff viewing this page (via "View") do not see the control.
