@@ -61,7 +61,7 @@ def view_student(student_number=None):
         nav = div().classes('subnav')
         nav += a('← Back to students', href=url_for('main.index')).classes('back-link')
         if cur_role == 'student' and cur_user == student_number:
-            nav += a('Join queue →', href=url_for('queue.queue'))
+            nav += a('Sign up to be evaluated →', href=url_for('queue.queue'))
         p += nav
         states, recorded_at = db.achievement_states(sql, student_number)
         # Only this student's enrolled courses (#11): a part-time student in CPS109

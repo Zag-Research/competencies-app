@@ -102,7 +102,9 @@ def queue_student_view(student_number):
                        placeholder='e.g. 12 or "back-left table"')
             f += button('I am here' if not seat else 'Update seat',
                         type='submit').classes('roster-link')
-            p += div(f).classes('queue-seat')
+            # Stack top-to-bottom so the order reads clearly: prompt, then the box to
+            # type the seat, then the button last.
+            p += div(f).classes('queue-seat-entry')
         current_day = None
         for (rid, _cid, name, _seat, status, studio_date, bumped_by) in pending:
             # A heading per session, so a student can see what they booked for
@@ -178,7 +180,9 @@ def queue_student_view(student_number):
             lbl += input(type='checkbox', name='competency_ids', value=str(cid))
             lbl += span(name)
             f += lbl
-        f += button('Join queue', type='submit').classes('roster-link')
+        # The available list can be long (up to 80 competencies), so keep the submit
+        # button pinned to the bottom of the screen instead of at the very end (#UX).
+        f += div(button('Sign up', type='submit').classes('roster-link')).classes('queue-signup-bar')
         p += f
     elif available and not bookable:
         p += div('Every upcoming studio session is full for you (' + str(db.daily_cap())
