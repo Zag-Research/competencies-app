@@ -290,6 +290,34 @@ def test_seat_on_a_non_studio_day_leaves_bumped_where_it_is(db, monkeypatch):
     assert where == STUDIO   # unchanged; not dragged onto Saturday
 
 
+def test_progress_page_shows_in_the_queue_for_a_pending_competency(db):
+    """A signed-up competency reads as 'In the queue' on the progress page, not a bare
+    'Not assessed'."""
+    import app as app_module
+    add_request('500111111', 1)                      # normal pending sign-up
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    body = c.get('/view/500111111').get_data(as_text=True)
+    assert 'In the queue' in body
+
+
+def test_progress_page_shows_carried_over_for_a_bumped_competency(db):
+    """A bumped competency reads as 'Carried over' on the progress page."""
+    import app as app_module
+    rid = add_request('500111111', 1)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        db.release_request(sql, rid, 'dmason')       # bumped
+    c = app_module.app.test_client()
+    with c.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    body = c.get('/view/500111111').get_data(as_text=True)
+    assert 'Carried over' in body
+
+
 def test_declined_competency_is_claimable_by_another_ta(db):
     """Back to plain 'waiting' means someone else can genuinely pick it up."""
     declined = add_request('500111111', 1)
