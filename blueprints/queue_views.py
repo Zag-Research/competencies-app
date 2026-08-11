@@ -45,11 +45,17 @@ def queue_student_view(student_number):
             for day in studios
         }
         present_today = db.is_present(sql, student_number, today)
-    # Attendance is its own thing, shown only on a day the studio actually runs.
-    # It stands apart from signing up or taking a seat: a student who just comes to
-    # work still checks in, so "was here" is captured for everyone, not only those
-    # who demo a competency.
-    if logic.is_studio_day(today):
+    # Seat and "a TA is coming" describe the session happening right now, so they
+    # only ever read from today's requests. A booking for next Tuesday must not
+    # make the student look seated and waiting today.
+    seat = next((row[3] for row in pending if row[3] and row[5] == today), None)
+    being_evaluated = any(row[4] == 'claimed' and row[5] == today for row in pending)
+    has_today = any(row[5] == today for row in pending)
+    # Attendance check-in, on a studio day, and only when the student is NOT signed up
+    # for today: taking a seat below already marks them present, so a second "I'm here
+    # today" button would just be a confusing duplicate. The standalone check-in is for
+    # a student who came to the studio but is not being evaluated today.
+    if logic.is_studio_day(today) and not has_today:
         if present_today:
             p += div('You are checked in for today. See you next session.'
                      ).classes('queue-seat-set')
@@ -58,12 +64,6 @@ def queue_student_view(student_number):
             check += span('Here for today\'s session? ')
             check += button("I'm here today", type='submit').classes('roster-link')
             p += div(check).classes('queue-checkin')
-    # Seat and "a TA is coming" describe the session happening right now, so they
-    # only ever read from today's requests. A booking for next Tuesday must not
-    # make the student look seated and waiting today.
-    seat = next((row[3] for row in pending if row[3] and row[5] == today), None)
-    being_evaluated = any(row[4] == 'claimed' and row[5] == today for row in pending)
-    has_today = any(row[5] == today for row in pending)
     available = []
     for (cid, name, course) in all_competencies:
         if cid in pending_ids:
