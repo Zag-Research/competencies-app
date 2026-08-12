@@ -40,7 +40,6 @@ def mark_student(student_number=None):
         first, last = student
         p += h1('Marking: ' + first + ' ' + last)
         p += div(
-            a('← Back to students', href=url_for('main.index')).classes('back-link'),
             a('View as student', href=url_for('main.view_student', student_number=student_number)).classes('back-link'),
         ).classes('subnav')
         # current recorded state per competency: competency_id -> status

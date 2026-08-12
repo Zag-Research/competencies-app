@@ -58,10 +58,8 @@ def view_student(student_number=None):
             return str(p)
         first, last = student
         p += h1('Progress: ' + first + ' ' + last)
+        # Staff reach the roster from the header nav now; a student gets a sign-up link.
         nav = div().classes('subnav')
-        # Only staff have a roster to go back to; a student on their own page does not.
-        if cur_role == 'staff':
-            nav += a('← Back to students', href=url_for('main.index')).classes('back-link')
         if cur_role == 'student' and cur_user == student_number:
             nav += a('Sign up to be evaluated →', href=url_for('queue.queue'))
         p += nav
@@ -181,7 +179,6 @@ def attendance():
     p = page()
     p += page_header()
     p += h1('Attendance')
-    p += div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
     p += div('Sessions attended per student. The attended-vs-total percentage '
              'arrives with the term calendar at deployment; for now this is the '
              'raw count.').classes('subnav')
@@ -220,7 +217,6 @@ def endorsements():
     p = page()
     p += page_header()
     p += h1('Peer shout-outs')
-    p += div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
     with db.cursor() as sql:
         tallies = db.endorsement_tallies(sql)
     if not tallies:
