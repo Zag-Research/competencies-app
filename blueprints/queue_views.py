@@ -204,7 +204,7 @@ def queue_staff_view(group_by='student', day=None):
     p = page()
     p += page_header()
     p += h1('Evaluation queue')
-    nav = div(a('← Back to students', href=url_for('main.index'))).classes('subnav')
+    nav = div().classes('subnav')
     # Same requests, two groupings: work through one student at a time, or work
     # through everyone who wants the same competency. Links carry the session so
     # switching grouping keeps the day.
