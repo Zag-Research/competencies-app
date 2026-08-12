@@ -18,11 +18,7 @@ def index():
     p = page()
     p += page_header()
     p += h1('Students')
-    p += div(
-        a('Queue →', href=url_for('queue.queue')),
-        a('Attendance →', href=url_for('main.attendance')),
-        a('Shout-outs →', href=url_for('main.endorsements')),
-    ).classes('subnav')
+    # (Queue / Attendance / Shout-outs live in the header nav now, no second row here.)
     with db.cursor() as sql:
         for (number, first, last) in sql.execute(
                 "select student_number, first_name, last_name from students order by last_name").fetchall():
