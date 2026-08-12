@@ -27,11 +27,14 @@ a {
     font-weight: 700;
     color: #1a1a1a;
 }
-/* Staff-only nav in the header, so every staff view is reachable from every page. */
+/* Staff-only nav, on its own row below the sign-in info (flex-basis 100% forces it to
+   wrap onto a second line), so every staff view is reachable without crowding the header. */
 .staff-nav {
+    flex-basis: 100%;
     display: flex;
-    gap: 0.9rem;
+    gap: 1.2rem;
     flex-wrap: wrap;
+    margin-top: 0.4rem;
 }
 .staff-nav-link {
     color: #1a5fb4;
