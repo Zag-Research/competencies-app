@@ -27,6 +27,16 @@ a {
     font-weight: 700;
     color: #1a1a1a;
 }
+/* Staff-only nav in the header, so every staff view is reachable from every page. */
+.staff-nav {
+    display: flex;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+}
+.staff-nav-link {
+    color: #1a5fb4;
+    font-size: 0.95rem;
+}
 .whoami {
     margin-left: auto;
     font-size: 0.9rem;

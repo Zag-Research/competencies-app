@@ -30,6 +30,15 @@ def page_header():
     header = div().classes('site-header')
     header += a('Competency Tracker', href=url_for('main.index')).classes('site-title')
     user, role = current_user()
+    if role == 'staff':
+        # Staff work across several views, so keep every one reachable from every page:
+        # a TA should never have to navigate back to the home page to find one.
+        nav = span().classes('staff-nav')
+        nav += a('Queue', href=url_for('queue.queue')).classes('staff-nav-link')
+        nav += a('Students', href=url_for('main.index')).classes('staff-nav-link')
+        nav += a('Attendance', href=url_for('main.attendance')).classes('staff-nav-link')
+        nav += a('Shout-outs', href=url_for('main.endorsements')).classes('staff-nav-link')
+        header += nav
     if user:
         header += span('Signed in as ' + user + ' (' + role + ')').classes('whoami')
         header += a('Switch user', href=url_for('auth.login')).classes('back-link')
