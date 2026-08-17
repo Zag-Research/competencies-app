@@ -107,11 +107,22 @@ INSERT INTO competencies (name, description, course) VALUES ('State Diagrams', '
 INSERT INTO competencies (name, description, course) VALUES ('Given a state diagram, produces a corresponding circuit diagram', 'Determines the FF inputs required to cause the transitions; Produces a circuit diagram implementing the state diagram; Produces alternate circuits using different FFs', 'CPS213');
 INSERT INTO competencies (name, description, course) VALUES ('Register Circuit', 'Understands the functionality of a register and the purpose of its input signals; Produces a function table for a register; Produces a state diagram, state table, and circuit for a 1-bit register; Produces the above for a 4-bit parallel register', 'CPS213');
 
--- achievements. Columns are listed explicitly so adding one to the schema does
--- not silently break seeding, which is how evaluated_by (#48) arrived.
-INSERT INTO achievements (student_number, competency_id, status, date_recorded, evaluated_by)
+-- achievements: the current state of a competency, one row per student. Columns are
+-- listed explicitly so a future schema addition does not silently break seeding.
+INSERT INTO achievements (student_number, competency_id, status, date_recorded)
+  VALUES('600990517', 1, 'achieved', '2026-06-05 15:13');
+INSERT INTO achievements (student_number, competency_id, status, date_recorded)
+  VALUES('500880917', 2, 'achieved', '2026-06-05 15:13');
+
+-- evaluations: the events behind those two results, plus the failed first attempt
+-- that 600990517 made before passing. That third row is the case achievements alone
+-- cannot show: two evaluations, one current state, and two different TAs who each
+-- did a piece of work.
+INSERT INTO evaluations (student_number, competency_id, status, recorded_at, evaluated_by)
+  VALUES('600990517', 1, 'cooling_off', '2026-06-02 14:40', 'lfortune');
+INSERT INTO evaluations (student_number, competency_id, status, recorded_at, evaluated_by)
   VALUES('600990517', 1, 'achieved', '2026-06-05 15:13', 'dmason');
-INSERT INTO achievements (student_number, competency_id, status, date_recorded, evaluated_by)
+INSERT INTO evaluations (student_number, competency_id, status, recorded_at, evaluated_by)
   VALUES('500880917', 2, 'achieved', '2026-06-05 15:13', 'lfortune');
 
 -- requests (the evaluation queue) start empty: students create them at runtime by
