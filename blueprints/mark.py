@@ -92,13 +92,7 @@ def save_mark(student_number, competency_id, new_state):
         return ('', 400)
     with db.cursor() as sql:
         if new_state == 'unassessed':
-            sql.execute(
-                "delete from achievements where student_number = ? and competency_id = ?",
-                (student_number, competency_id)
-            )
+            db.clear_achievement(sql, student_number, competency_id)
         else:
-            sql.execute(
-                "insert or replace into achievements (student_number, competency_id, status, date_recorded) values (?, ?, ?, CURRENT_TIMESTAMP)",
-                (student_number, competency_id, new_state)
-            )
+            db.record_achievement(sql, student_number, competency_id, new_state, user)
     return ''

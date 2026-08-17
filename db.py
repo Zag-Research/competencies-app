@@ -358,6 +358,89 @@ def achieved_competency_ids(sql, student_number):
     return {row[0] for row in rows}
 
 
+def record_achievement(sql, student_number, competency_id, status, evaluated_by):
+    """Record one evaluation, from whichever marking screen produced it.
+
+    Two writes, because two different questions are being answered:
+
+    - `achievements` gets the student's CURRENT state for this competency, replacing
+      whatever was there. That is what their progress page reads.
+    - `evaluations` gets a new row for the evaluation that just happened, appended.
+      That is what the per-evaluator report counts.
+
+    Keeping both matters on a retry. A student marked 'not passed' on Tuesday and
+    'achieved' on Thursday should show one state (achieved) and two evaluations, one
+    each for the TAs who did them. Counting from `achievements` alone would erase the
+    Tuesday evaluator, which is exactly the harder evaluation to have done.
+
+    The queue screen and the /mark page both stay (#44), so this is the single place
+    either of them writes a result. That is what keeps them consistent: a rule added
+    for one is a rule for both, and neither blueprint has to remember any of it.
+    """
+    sql.execute(
+        "insert or replace into achievements "
+        "(student_number, competency_id, status, date_recorded) "
+        "values (?, ?, ?, CURRENT_TIMESTAMP)",
+        (student_number, competency_id, status)
+    )
+    sql.execute(
+        "insert into evaluations "
+        "(student_number, competency_id, status, recorded_at, evaluated_by) "
+        "values (?, ?, ?, CURRENT_TIMESTAMP, ?)",
+        (student_number, competency_id, status, evaluated_by)
+    )
+
+
+def clear_achievement(sql, student_number, competency_id):
+    """Undo the most recent evaluation, so the competency reads 'not assessed' again.
+
+    Both screens offer this for the same reason: a TA mis-tapped. So it drops the
+    state AND the single most recent evaluation row, because an evaluation recorded
+    by accident did not happen and must not be counted as somebody's work.
+
+    Only the most recent one. An undo after a genuine earlier evaluation (fail on
+    Tuesday, mis-tap on Thursday) must not quietly delete Tuesday's record too.
+    """
+    sql.execute(
+        "delete from achievements where student_number = ? and competency_id = ?",
+        (student_number, competency_id)
+    )
+    sql.execute(
+        "delete from evaluations where id = ("
+        "  select id from evaluations"
+        "   where student_number = ? and competency_id = ?"
+        "   order by id desc limit 1)",
+        (student_number, competency_id)
+    )
+
+
+def evaluator_counts(sql, since=None):
+    """How many evaluations each staff member has recorded, as {evaluator: count}.
+
+    Counts evaluations, not passes: recording 'not passed' is exactly as much work
+    as recording 'achieved', and the question this answers is whether the load is
+    being shared (#49), not who is generous.
+
+    `since` (an ISO date) narrows to recent work, which is what separates "has done
+    little all term" from "is not helping this week".
+
+    Counted from `evaluations`, not `achievements`, and that is the whole reason
+    that table exists: a student who fails on Tuesday and passes on Thursday has one
+    achievement but two evaluations, and both TAs did the work.
+    """
+    if since:
+        rows = sql.execute(
+            "select evaluated_by, count(*) from evaluations "
+            "where recorded_at >= ? group by evaluated_by",
+            (since,)
+        ).fetchall()
+    else:
+        rows = sql.execute(
+            "select evaluated_by, count(*) from evaluations group by evaluated_by"
+        ).fetchall()
+    return {who: count for (who, count) in rows}
+
+
 def achievement_states(sql, student_number):
     """A student's recorded results as two dicts keyed by competency_id:
     {id: status} and {id: date_recorded}.

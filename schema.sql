@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS evaluations;
 DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS endorsements;
 DROP TABLE IF EXISTS enrollments;
@@ -70,6 +71,35 @@ CREATE TABLE requests (
 -- an 'insert or ignore' can only land one thank-you per classmate per day, so a
 -- student cannot inflate someone by tapping repeatedly. A fresh day is a fresh
 -- row, because they may genuinely have helped again.
+-- evaluations: one row per evaluation that actually took place (#48/#49). Appended,
+-- never overwritten.
+--
+-- Deliberately separate from `achievements`, and the distinction is the whole point.
+-- `achievements` holds the CURRENT STATE of a competency: one row per student and
+-- competency, replaced when they retry. So a student who is marked "not passed" on
+-- Tuesday and "achieved" on Thursday leaves exactly one row behind, Thursday's.
+--
+-- That is right for showing a student where they stand, and wrong for asking who is
+-- carrying the evaluation load: the TA who did Tuesday's evaluation, the harder one
+-- where they had to tell someone they were not ready, would vanish from the count.
+-- Counting work needs the events, not the state.
+--
+-- A row is removed only by an undo, which exists for mis-taps: an evaluation that
+-- was recorded by accident did not happen, and should not be counted as work.
+CREATE TABLE evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_number TEXT,
+    competency_id INTEGER,
+    status TEXT,
+    recorded_at TEXT,
+    -- NOT NULL: every row here is created by a signed-in staff member marking
+    -- something, so an evaluation with nobody attached is a bug, not a state the
+    -- report should have to render.
+    evaluated_by TEXT NOT NULL,
+    FOREIGN KEY (student_number) REFERENCES students(student_number),
+    FOREIGN KEY (competency_id) REFERENCES competencies(id)
+);
+
 CREATE TABLE endorsements (
     from_student TEXT,
     to_student TEXT,
