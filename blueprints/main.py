@@ -184,6 +184,37 @@ def endorse():
     return redirect(url_for('main.view_student', student_number=user))
 
 
+@main_bp.route('/evaluators')
+def evaluators():
+    # Staff-only. Who has recorded each evaluation, so the instructor can spot
+    # someone carrying too little and encourage them, rather than finding out at
+    # the end of term (#49). Framed the way it was raised in the Aug 12 meeting:
+    # about sharing the load, not ranking people. Students never see this.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    p = page()
+    p += page_header()
+    p += h1('Evaluations by evaluator')
+    p += div('Every evaluation counts the same here, passed or not, because both '
+             'take the same time at the desk. A retry counts for both TAs: the one '
+             'who said "not yet" did the work as much as the one who passed them. '
+             'The recent column is the last seven days.').classes('subnav')
+    with db.cursor() as sql:
+        total = db.evaluator_counts(sql)
+        recent = db.evaluator_counts(sql, since=logic.days_ago(7))
+    if not total:
+        p += div('No evaluations recorded yet.').classes('queue-empty')
+        return str(p)
+    for who in sorted(total, key=lambda w: -total[w]):
+        p += div(
+            span(who).classes('progress-name'),
+            span(str(recent.get(who, 0)) + ' in the last 7 days').classes('progress-badge'),
+            span(str(total[who]) + ' total').classes('progress-badge'),
+        ).classes('progress-row')
+    return str(p)
+
+
 @main_bp.route('/attendance')
 def attendance():
     # Staff-only. Two things: how many sessions each student has attended (the raw

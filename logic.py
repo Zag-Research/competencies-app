@@ -115,6 +115,16 @@ def today_toronto():
     return datetime.now(timezone.utc).astimezone(TORONTO).date()
 
 
+def days_ago(n, today=None):
+    """`n` days before today, as an ISO date string.
+
+    A cutoff for "recently", written once here because date_recorded is stored as
+    text: comparing 'YYYY-MM-DD HH:MM' against a plain 'YYYY-MM-DD' sorts correctly
+    only because the date comes first, which is worth stating rather than rely on.
+    """
+    return ((today or today_toronto()) - timedelta(days=n)).isoformat()
+
+
 def is_studio_day(iso_date):
     try:
         d = date.fromisoformat(iso_date)

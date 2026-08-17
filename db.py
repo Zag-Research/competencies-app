@@ -414,6 +414,33 @@ def clear_achievement(sql, student_number, competency_id):
     )
 
 
+def evaluator_counts(sql, since=None):
+    """How many evaluations each staff member has recorded, as {evaluator: count}.
+
+    Counts evaluations, not passes: recording 'not passed' is exactly as much work
+    as recording 'achieved', and the question this answers is whether the load is
+    being shared (#49), not who is generous.
+
+    `since` (an ISO date) narrows to recent work, which is what separates "has done
+    little all term" from "is not helping this week".
+
+    Counted from `evaluations`, not `achievements`, and that is the whole reason
+    that table exists: a student who fails on Tuesday and passes on Thursday has one
+    achievement but two evaluations, and both TAs did the work.
+    """
+    if since:
+        rows = sql.execute(
+            "select evaluated_by, count(*) from evaluations "
+            "where recorded_at >= ? group by evaluated_by",
+            (since,)
+        ).fetchall()
+    else:
+        rows = sql.execute(
+            "select evaluated_by, count(*) from evaluations group by evaluated_by"
+        ).fetchall()
+    return {who: count for (who, count) in rows}
+
+
 def achievement_states(sql, student_number):
     """A student's recorded results as two dicts keyed by competency_id:
     {id: status} and {id: date_recorded}.
