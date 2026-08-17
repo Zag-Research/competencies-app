@@ -5,23 +5,36 @@ Kept separate so every blueprint can import these without importing each other
 """
 from flask import session, request, url_for, current_app
 from myhtml import *
-
-
-# Dev mode hardcodes the user to dmason so no CAS/Apache is needed locally.
-# In production, Apache mod_auth_cas sets the Cas-User header.
-def userCas(user=None):
-    if current_app.config.get('ENV') == 'development':
-        casUser = 'dmason'
-    if 'Cas-User' in request.headers:
-        casUser = request.headers['Cas-User']
-    if not user:
-        user = casUser
-    return user, casUser
+import db
 
 
 def current_user():
-    # Interim session-based identity (CAS replaces this later). Returns (user, role).
+    """Who is making this request, as (user, role); (None, None) if not signed in.
+
+    Production identity comes from TMU CAS: Apache's mod_auth_cas authenticates the user
+    and sets the Cas-User header, which we trust only in production (Apache must be
+    configured to overwrite any client-supplied one). Development uses the interim /login
+    session, so no CAS or Apache is needed locally.
+    """
+    if current_app.config.get('ENV') == 'production':
+        return identity_from_cas(request.headers.get('Cas-User'))
     return session.get('user'), session.get('role')
+
+
+def identity_from_cas(cas_user):
+    """Map a TMU CAS username to (user, role); (None, None) if unrecognized.
+
+    Staff resolve directly: their CAS username is already the admin key. Students are the
+    one open deployment decision: a student's CAS username is NOT their student_number, so
+    either TMU CAS must release the student number (then cas_user already is it), or a
+    cas_username column on `students` maps it. Until that is settled this treats cas_user
+    as the student key, which is correct for staff and for the CAS-releases-number setup.
+    See DEPLOYMENT.md.
+    """
+    if not cas_user:
+        return None, None
+    role = db.lookup_role(cas_user)
+    return (cas_user, role) if role else (None, None)
 
 
 def page_header():

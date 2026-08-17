@@ -4,9 +4,12 @@ Everything that talks to SQLite lives here so the rest of the app never opens a
 connection itself. One place to change if the storage ever moves (Postgres, etc).
 """
 from contextlib import closing, contextmanager
+import os
 import sqlite3
 
-DB_PATH = "course-data.db"
+# Relative default for local dev; set an absolute DB_PATH in production, since under
+# Apache/mod_wsgi the working directory is not the project folder. See DEPLOYMENT.md.
+DB_PATH = os.environ.get("DB_PATH", "course-data.db")
 
 
 @contextmanager
