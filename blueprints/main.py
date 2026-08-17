@@ -85,6 +85,28 @@ def view_student(student_number=None):
                     link.addClasses('is-active')
                 filt += link
             p += filt
+        # Pace (#50): the student's completion against the studio's, so drifting
+        # behind shows up in week 4 rather than week 11. Counted over whatever the
+        # filter above is showing, so narrowing to one course narrows the figure
+        # with it and the number always describes the list underneath it.
+        shown = [cid for (cid, _name, course) in comps
+                 if not selected or course == selected]
+        achieved = sum(1 for cid in shown if states.get(cid) == 'achieved')
+        elapsed, sessions = logic.term_elapsed()
+        done_pct = logic.percent(achieved, len(shown))
+        term_pct = logic.percent(elapsed, sessions)
+        pace = div().classes('pace')
+        for label, pct, tone in (('Competencies', done_pct, 'is-you'),
+                                 ('Studio', term_pct, 'is-term')):
+            fill = div().classes('pace-fill').addClasses(tone)
+            fill.addAttributes(style='width: ' + str(pct) + '%')
+            pace += div(
+                span(label).classes('pace-label'),
+                div(fill).classes('pace-track'),
+                span(str(pct) + '%').classes('pace-value'),
+            ).classes('pace-row')
+        pace += div(logic.pace_note(done_pct, term_pct, elapsed)).classes('pace-note')
+        p += pace
         current_course = None
         for (cid, name, course) in comps:
             if selected and course != selected:

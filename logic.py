@@ -96,6 +96,13 @@ STUDIO_BREAKS = (
     (date(2027, 2, 16), date(2027, 2, 19)),    # Winter study week
 )
 
+# Term boundaries (TMU 2026-2027 calendar). With STUDIO_WEEKDAYS and STUDIO_BREAKS
+# these are all it takes to *count* the studio's sessions instead of hard-coding a
+# number: walking this range yields exactly the 36 sessions the course is built
+# around, which is the check that these three facts agree with each other.
+TERM_START = date(2026, 9, 8)   # first day of Fall term undergraduate classes
+TERM_END = date(2026, 12, 7)    # last day of Fall term classes
+
 
 def in_studio_break(day):
     """True if `day` (a date) falls in a reading week, when the studio is closed."""
@@ -146,6 +153,66 @@ def studio_label(iso_date):
     except (TypeError, ValueError):
         return iso_date
     return d.strftime('%A, %B ') + str(d.day)
+
+
+# Pace (#50). A student should find out they are drifting in week 4, not week 11, so
+# their page compares two fractions: how much of their competency list is done, and
+# how much of the studio has happened. Sessions, not calendar days, are the honest
+# denominator; reading week should not make anyone look behind.
+#
+# How far the two percentages must diverge before the page says anything about it.
+# Inside this band a student is on pace, and "you are 2% behind" is noise dressed up
+# as a warning.
+PACE_TOLERANCE = 5
+
+
+def studio_days():
+    """Every studio day in the term, in order."""
+    days = []
+    day = TERM_START
+    while day <= TERM_END:
+        if day.weekday() in STUDIO_WEEKDAYS and not in_studio_break(day):
+            days.append(day)
+        day += timedelta(days=1)
+    return days
+
+
+def term_elapsed(today=None):
+    """How much of the studio is behind us, as (sessions_done, sessions_total).
+
+    A session counts once it is over, so the one a student is sitting in does not
+    yet count against them. Being told you are behind on the strength of a session
+    still in progress would be both wrong and discouraging.
+    """
+    today = today or today_toronto()
+    sessions = studio_days()
+    return sum(1 for day in sessions if day < today), len(sessions)
+
+
+def percent(part, whole):
+    """`part` of `whole` as a whole number percentage; 0 when there is no whole.
+
+    Rounded, because a student reading '32.7%' learns nothing that '33%' does not
+    already tell them.
+    """
+    return round(100 * part / whole) if whole else 0
+
+
+def pace_note(done_pct, term_pct, elapsed):
+    """The one line of encouragement shown beneath the two percentages.
+
+    Deliberately a carrot: ahead reads as praise, behind reads as a nudge, and
+    neither reads as a failure. `elapsed` distinguishes 'you have done nothing'
+    from 'nothing has happened yet', which deserve very different sentences.
+    """
+    if not elapsed:
+        return 'The studio has not started yet. Nothing to catch up on.'
+    gap = done_pct - term_pct
+    if gap >= PACE_TOLERANCE:
+        return 'You are ahead of where the studio is. Nice work.'
+    if gap <= -PACE_TOLERANCE:
+        return 'The studio is a little ahead of you. Worth picking up the pace.'
+    return 'You are keeping pace with the studio.'
 
 
 # Sign-up limits per studio session (#22). Two rules at once:

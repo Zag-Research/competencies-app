@@ -436,3 +436,51 @@ ul.competency-scope li {
     color: #b60205;
     margin: 0.6rem 0;
 }
+
+/* Pace (#50): the student's completion against the studio's, as two bars. The ask
+   was a carrot, so the student's own bar carries the colour and the studio sits
+   behind it in grey as a neutral reference, whichever way the comparison falls. */
+.pace {
+    margin: 0 0 1.6rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+}
+.pace-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 0.6rem;
+}
+.pace-label {
+    flex: 0 0 7.5rem;
+    font-size: 0.95rem;
+    color: #5f6571;
+}
+.pace-track {
+    flex: 1;
+    height: 0.55rem;
+    background: #eceef1;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.pace-fill {
+    height: 100%;
+    border-radius: 999px;
+}
+.pace-fill.is-you {
+    background: #1e6b30;
+}
+.pace-fill.is-term {
+    background: #9aa1ad;
+}
+.pace-value {
+    flex: 0 0 3rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.pace-note {
+    margin-top: 0.8rem;
+    font-size: 0.95rem;
+    color: #5f6571;
+}
