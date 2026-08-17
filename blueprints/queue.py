@@ -333,10 +333,7 @@ def queue_mark(request_id, state):
         if req is None:
             return redirect(url_for('queue.queue'))
         student_number, competency_id = req
-        sql.execute(
-            "insert or replace into achievements (student_number, competency_id, status, date_recorded) values (?, ?, ?, CURRENT_TIMESTAMP)",
-            (student_number, competency_id, state)
-        )
+        db.record_achievement(sql, student_number, competency_id, state, user)
         sql.execute(
             "update requests set status = 'done' where id = ?",
             (request_id,)
@@ -368,10 +365,7 @@ def queue_undo(request_id):
         if req is None:
             return redirect(url_for('queue.queue'))
         student_number, competency_id = req
-        sql.execute(
-            "delete from achievements where student_number = ? and competency_id = ?",
-            (student_number, competency_id)
-        )
+        db.clear_achievement(sql, student_number, competency_id)
         sql.execute(
             """update requests
                   set status = 'claimed', claimed_by = ?, claimed_at = CURRENT_TIMESTAMP

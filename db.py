@@ -358,6 +358,36 @@ def achieved_competency_ids(sql, student_number):
     return {row[0] for row in rows}
 
 
+def record_achievement(sql, student_number, competency_id, status, evaluated_by):
+    """Write one evaluation result, from whichever marking screen produced it.
+
+    The queue evaluation screen and the /mark page are both real workflows and both
+    stay (#44), so this is the single place either of them writes a result. Putting
+    the write here is what keeps them consistent: a rule added for one screen is a
+    rule for both, and the evaluator is recorded whichever screen was used (#48),
+    without either blueprint having to remember to do it.
+    """
+    sql.execute(
+        "insert or replace into achievements "
+        "(student_number, competency_id, status, date_recorded, evaluated_by) "
+        "values (?, ?, ?, CURRENT_TIMESTAMP, ?)",
+        (student_number, competency_id, status, evaluated_by)
+    )
+
+
+def clear_achievement(sql, student_number, competency_id):
+    """Remove a result, so the competency reads as 'not assessed' again.
+
+    The undo half of record_achievement, used by both screens for the same reason:
+    a mis-tap should leave no trace at all, including no evaluator, rather than a
+    row recording that somebody assessed it as nothing.
+    """
+    sql.execute(
+        "delete from achievements where student_number = ? and competency_id = ?",
+        (student_number, competency_id)
+    )
+
+
 def achievement_states(sql, student_number):
     """A student's recorded results as two dicts keyed by competency_id:
     {id: status} and {id: date_recorded}.

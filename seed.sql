@@ -107,9 +107,12 @@ INSERT INTO competencies (name, description, course) VALUES ('State Diagrams', '
 INSERT INTO competencies (name, description, course) VALUES ('Given a state diagram, produces a corresponding circuit diagram', 'Determines the FF inputs required to cause the transitions; Produces a circuit diagram implementing the state diagram; Produces alternate circuits using different FFs', 'CPS213');
 INSERT INTO competencies (name, description, course) VALUES ('Register Circuit', 'Understands the functionality of a register and the purpose of its input signals; Produces a function table for a register; Produces a state diagram, state table, and circuit for a 1-bit register; Produces the above for a 4-bit parallel register', 'CPS213');
 
--- achievements (student_number, competency_id, status, date_recorded)
-INSERT INTO achievements VALUES('600990517', 1, 'achieved', '2026-06-05 15:13');
-INSERT INTO achievements VALUES('500880917', 2, 'achieved', '2026-06-05 15:13');
+-- achievements. Columns are listed explicitly so adding one to the schema does
+-- not silently break seeding, which is how evaluated_by (#48) arrived.
+INSERT INTO achievements (student_number, competency_id, status, date_recorded, evaluated_by)
+  VALUES('600990517', 1, 'achieved', '2026-06-05 15:13', 'dmason');
+INSERT INTO achievements (student_number, competency_id, status, date_recorded, evaluated_by)
+  VALUES('500880917', 2, 'achieved', '2026-06-05 15:13', 'lfortune');
 
 -- requests (the evaluation queue) start empty: students create them at runtime by
 -- signing up. Seeding fake ones made the staff queue show people who never signed

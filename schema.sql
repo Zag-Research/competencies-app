@@ -28,6 +28,15 @@ CREATE TABLE achievements (
     competency_id INTEGER,
     status TEXT,
     date_recorded TEXT,
+    -- The staff member who recorded this result (#48), so the instructor can see
+    -- that evaluation load is being shared. Taken from whoever is signed in at the
+    -- moment of the write, NOT from the request's claimed_by: a competency handed
+    -- on after a decline (#19) is finished by someone other than the TA who first
+    -- claimed it, and the person who did the evaluating is the one who counts.
+    --
+    -- NULL on rows written before this was tracked. Reports show those as unknown
+    -- rather than quietly attributing them to somebody.
+    evaluated_by TEXT,
     PRIMARY KEY (student_number, competency_id),
     FOREIGN KEY (student_number) REFERENCES students(student_number),
     FOREIGN KEY (competency_id) REFERENCES competencies(id)

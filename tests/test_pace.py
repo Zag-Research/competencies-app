@@ -90,7 +90,8 @@ def db(tmp_path, monkeypatch):
         sql.execute("insert into competencies (id, name, course) values (1, 'Nested loops', 'CPS109')")
         sql.execute("insert into competencies (id, name, course) values (2, 'Recursion', 'CPS109')")
         sql.execute("insert into enrollments values ('500111111', 'CPS109')")
-        sql.execute("insert into achievements values ('500111111', 1, 'achieved', '2026-09-15 10:00')")
+        sql.execute("insert into achievements (student_number, competency_id, status, date_recorded)"
+                    " values ('500111111', 1, 'achieved', '2026-09-15 10:00')")
     return db_module
 
 
