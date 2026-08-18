@@ -51,8 +51,12 @@ moving.
 - The tests aim at the parts that actually break: two TAs claiming the same student at
   the same instant, retry timing across weekends and reading week, a retry crediting
   both TAs, and the lab check when DNS fails.
-- **Every change is reviewed in a pull request before it is merged.** An independent
-  code review of the recent features found only minor issues and no real bugs.
+- **Every change goes through a pull request before it is merged**, with the reasoning
+  for each decision written in the description.
+- Worth being honest about the limit: tests are written by the person who built the
+  thing, so they share that person's blind spots. The two worst problems found so far,
+  a student identity bug and a config that would have locked every TA out, were both
+  caught by asking "what happens on day one" rather than by any test.
 
 ## Quick start
 
