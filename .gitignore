@@ -1,4 +1,6 @@
-course-data.db
+# The database and every backup of it. A backup holds real student results once
+# this is live, so the glob matters more than the plain name.
+course-data.db*
 venv/
 __pycache__/
 scratch.py
