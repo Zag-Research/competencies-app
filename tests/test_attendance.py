@@ -86,15 +86,23 @@ def signed_in_as(username, role):
     return client
 
 
-def test_checkin_records_on_a_studio_day(db, monkeypatch):
+def test_taking_a_seat_records_attendance_without_signing_up(db, monkeypatch):
+    """Since the "I'm here today" button was removed (#46), the seat IS the check-in.
+
+    A student who came to the studio to work rather than be evaluated still needs to
+    be counted present, so entering a seat records attendance on its own, with nothing
+    booked for the session.
+    """
     monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))  # Tuesday
-    signed_in_as('500111111', 'student').post('/queue/checkin')
+    signed_in_as('500111111', 'student').post('/queue/seat', data={'seat': '12'})
     assert count_for('500111111') == 1
 
 
-def test_checkin_does_nothing_off_a_studio_day(db, monkeypatch):
-    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 25))  # Saturday
-    signed_in_as('500111111', 'student').post('/queue/checkin')
+def test_the_removed_checkin_endpoint_is_gone(db, monkeypatch):
+    """The old route must not linger: one writer of attendance, not two (#46)."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))
+    response = signed_in_as('500111111', 'student').post('/queue/checkin')
+    assert response.status_code == 404
     assert count_for('500111111') == 0
 
 
@@ -115,10 +123,10 @@ def test_seat_on_a_non_studio_day_does_not_mark_present(db, monkeypatch):
     assert count_for('500111111') == 0
 
 
-def test_a_student_cannot_check_in_for_someone_else(db, monkeypatch):
+def test_a_student_cannot_be_marked_present_by_someone_else(db, monkeypatch):
     monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))
-    # Staff hitting the student check-in endpoint records nothing.
-    signed_in_as('dmason', 'staff').post('/queue/checkin')
+    # Staff hitting the student seat endpoint records nothing for any student.
+    signed_in_as('dmason', 'staff').post('/queue/seat', data={'seat': '12'})
     assert count_for('500111111') == 0
     assert count_for('500222222') == 0
 

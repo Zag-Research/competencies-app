@@ -6,7 +6,7 @@ from flask import Blueprint, request, url_for, session, redirect
 from myhtml import *
 import db
 import logic
-from common import current_user, page_header
+from common import current_user, page_header, request_is_in_lab
 from blueprints.queue_views import (
     queue_student_view, queue_staff_view, queue_cohort_view, queue_evaluate_view)
 
@@ -115,6 +115,13 @@ def queue_seat():
     user, role = current_user()
     if user is None or role != 'student':
         return redirect(url_for('auth.login'))
+    # The one location-gated action (#46): a seat means "I am here", so it has to come
+    # from a machine that is actually here. Enforced server-side as well as hidden in
+    # the view, because a hidden control is not a check.
+    if not request_is_in_lab():
+        session['queue_notice'] = ('Seat numbers can only be entered from a lab '
+                                   'machine in the studio.')
+        return redirect(url_for('queue.queue'))
     seat = request.form.get('seat', '').strip()
     # A seat is only ever about the session running today: it means "I am here, at
     # this machine, right now." Booked-ahead requests for other days are untouched.
@@ -128,10 +135,10 @@ def queue_seat():
         if seat and logic.is_studio_day(today):
             db.carry_bumped_forward(sql, user, today)
         db.set_seat(sql, user, seat or None, today)
-        # Taking a seat is a stronger "I am here" than the check-in button, so it
-        # marks attendance too. Guarded by is_studio_day like queue_checkin, so a
-        # crafted POST on a non-class day can't inflate the attended count. Leaving
-        # (empty seat) does not un-attend: they were still here today.
+        # Taking a seat IS "I am here", so it marks attendance. This is now the only
+        # writer of attendance (#46): the separate check-in button is gone. Guarded by
+        # is_studio_day so a crafted POST on a non-class day can't inflate the attended
+        # count. Leaving (an empty seat) does not un-attend: they were still here.
         if seat and logic.is_studio_day(today):
             db.mark_present(sql, user, today)
     if seat:
@@ -139,27 +146,6 @@ def queue_seat():
     else:
         session['queue_notice'] = ('Marked as away. You are still signed up, but '
                                    'staff will not see you until you enter a seat.')
-    return redirect(url_for('queue.queue'))
-
-
-@queue_bp.route('/queue/checkin', methods=['POST'])
-def queue_checkin():
-    # "I'm here today." Records attendance for today's session, independent of
-    # whether the student signs up for or demonstrates anything. Only counts on a
-    # real studio day, so a stray tap on a weekend records nothing.
-    user, role = current_user()
-    if user is None or role != 'student':
-        return redirect(url_for('auth.login'))
-    today = logic.today_toronto().isoformat()
-    if logic.is_studio_day(today):
-        with db.cursor() as sql:
-            db.mark_present(sql, user, today)
-            # Checking in is also "I'm here", so carry any bumped competencies into
-            # today too. Without this, a student whose only pending item is a bumped
-            # one never sees the seat form (it needs a request dated today), so this
-            # is their only way to resurface it (#19/#24).
-            db.carry_bumped_forward(sql, user, today)
-        session['queue_notice'] = 'Checked in for today. Thanks for coming.'
     return redirect(url_for('queue.queue'))
 
 

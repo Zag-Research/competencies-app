@@ -6,7 +6,7 @@ from flask import url_for, session
 from myhtml import *
 import db
 import logic
-from common import current_user, page_header
+from common import current_user, page_header, request_is_in_lab
 
 
 def queue_student_view(student_number):
@@ -51,19 +51,47 @@ def queue_student_view(student_number):
     seat = next((row[3] for row in pending if row[3] and row[5] == today), None)
     being_evaluated = any(row[4] == 'claimed' and row[5] == today for row in pending)
     has_today = any(row[5] == today for row in pending)
-    # Attendance check-in, on a studio day, and only when the student is NOT signed up
-    # for today: taking a seat below already marks them present, so a second "I'm here
-    # today" button would just be a confusing duplicate. The standalone check-in is for
-    # a student who came to the studio but is not being evaluated today.
-    if logic.is_studio_day(today) and not has_today:
-        if present_today:
-            p += div('You are checked in for today. See you next session.'
-                     ).classes('queue-seat-set')
+    # Seat entry: the one "I am here" action, and the only thing in this app gated to
+    # being physically in the studio (#46). It was two actions before, a seat and a
+    # separate "I'm here today" button, both writing attendance; Dave's call was that
+    # the seat already says it, so the button is gone.
+    #
+    # Shown on any studio day, not only when something is booked for today, because
+    # entering a seat is also how a student who came to work rather than be evaluated
+    # gets counted present, and how a bumped competency (#19/#24) is carried forward.
+    if logic.is_studio_day(today):
+        if not request_is_in_lab():
+            p += div('Seat numbers can only be entered from a lab machine in the '
+                     'studio, so a TA knows you are really there. Everything else on '
+                     'this page works from anywhere.').classes('queue-notice')
         else:
-            check = form(method='post', action=url_for('queue.queue_checkin'))
-            check += span('Here for today\'s session? ')
-            check += button("I'm here today", type='submit').classes('roster-link')
-            p += div(check).classes('queue-checkin')
+            # Students sign up before they get to the lab, so a request starts with no
+            # seat. Until they enter one, staff cannot see them: there is nowhere to
+            # walk to. Entering a seat is what puts them in front of a TA.
+            if being_evaluated:
+                p += div('A TA is on their way to you.').classes('queue-seat-set')
+            elif seat:
+                p += div(
+                    span('You are at seat ' + seat + '. A TA will come to you.'),
+                ).classes('queue-seat-set')
+            elif has_today:
+                p += div('You are signed up for today. Enter your seat number so a TA '
+                         'can find you. You will not appear in the staff queue until '
+                         'you do.').classes('queue-notice')
+            elif present_today:
+                p += div('You are marked present for today. See you next session.'
+                         ).classes('queue-seat-set')
+            f = form(method='post', action=url_for('queue.queue_seat'))
+            f += span('Where are you sitting?' if not seat else 'Moved spots?')
+            # Free text, not just a machine number: students may bring their own
+            # laptop and sit anywhere, so a location like "back-left table" is fine.
+            f += input(type='text', name='seat', value=seat or '',
+                       placeholder='e.g. 12 or "back-left table"')
+            f += button('I am here' if not seat else 'Update seat',
+                        type='submit').classes('roster-link')
+            # Stack top-to-bottom so the order reads clearly: prompt, then the box to
+            # type the seat, then the button last.
+            p += div(f).classes('queue-seat-entry')
     available = []
     for (cid, name, course) in all_competencies:
         if cid in pending_ids:
@@ -78,33 +106,6 @@ def queue_student_view(student_number):
                 available.append((cid, name, course))
     if pending:
         p += h2('In the queue')
-        # The seat only means anything for the session running today, so the whole
-        # seat block is skipped when everything booked is for a future session.
-        if has_today:
-            # Students sign up before they get to the lab, so a request starts with
-            # no seat. Until they enter one, staff cannot see them: there is nowhere
-            # to walk to. Entering a seat is what puts them in front of a TA.
-            if being_evaluated:
-                p += div('A TA is on their way to you.').classes('queue-seat-set')
-            elif seat:
-                p += div(
-                    span('You are at seat ' + seat + '. A TA will come to you.'),
-                ).classes('queue-seat-set')
-            else:
-                p += div('You are signed up for today. Enter your seat number when '
-                         'you get to the lab, so a TA can find you. You will not '
-                         'appear in the staff queue until you do.').classes('queue-notice')
-            f = form(method='post', action=url_for('queue.queue_seat'))
-            f += span('Where are you sitting?' if not seat else 'Moved spots?')
-            # Free text, not just a machine number: students may bring their own
-            # laptop and sit anywhere, so a location like "back-left table" is fine.
-            f += input(type='text', name='seat', value=seat or '',
-                       placeholder='e.g. 12 or "back-left table"')
-            f += button('I am here' if not seat else 'Update seat',
-                        type='submit').classes('roster-link')
-            # Stack top-to-bottom so the order reads clearly: prompt, then the box to
-            # type the seat, then the button last.
-            p += div(f).classes('queue-seat-entry')
         current_day = None
         for (rid, _cid, name, _seat, status, studio_date, bumped_by) in pending:
             # A heading per session, so a student can see what they booked for
