@@ -58,10 +58,15 @@ def resolves_to(monkeypatch, hostname):
     monkeypatch.setattr(common.socket, 'gethostbyaddr', fake)
 
 
+# In production a student arrives as two headers: their TMU username in Cas-User, and
+# their student number as a CAS attribute. The number is what identifies them here.
+def student_headers(student='500111111', username='achen'):
+    return {'Cas-User': username, 'CAS-studentnumber': student}
+
+
 def seat_post(app, seat='12', student='500111111'):
-    # Production identity comes from the Cas-User header Apache sets, not the session.
     return app.test_client().post('/queue/seat', data={'seat': seat},
-                                  headers={'Cas-User': student})
+                                  headers=student_headers(student))
 
 
 def attendance_count(student='500111111'):
@@ -132,7 +137,7 @@ def test_a_dns_failure_is_not_cached(db, in_production, monkeypatch):
 def test_the_seat_form_is_hidden_outside_the_lab(db, in_production, monkeypatch):
     resolves_to(monkeypatch, 'sarahs-macbook')
     body = in_production.test_client().get(
-        '/queue', headers={'Cas-User': '500111111'}).get_data(as_text=True)
+        '/queue', headers=student_headers()).get_data(as_text=True)
     assert 'queue-seat-entry' not in body
     assert 'can only be entered from a lab machine' in body
 
@@ -141,7 +146,7 @@ def test_the_rest_of_the_page_still_works_outside_the_lab(db, in_production, mon
     """Dave: anybody can open it anywhere. Only the seat is gated."""
     resolves_to(monkeypatch, 'sarahs-macbook')
     body = in_production.test_client().get(
-        '/queue', headers={'Cas-User': '500111111'}).get_data(as_text=True)
+        '/queue', headers=student_headers()).get_data(as_text=True)
     assert 'Nested loops' in body          # can still see and sign up for competencies
 
 
