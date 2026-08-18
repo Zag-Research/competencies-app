@@ -107,6 +107,30 @@ def view_student(student_number=None):
             ).classes('pace-row')
         pace += div(logic.pace_note(done_pct, term_pct, elapsed)).classes('pace-note')
         p += pace
+        # Worth reading (#51). Sits directly under the pace bars, on purpose: the note
+        # above may have just told them they are behind, and this is the nearest thing
+        # to something to do about it. Only on a student's own page; staff have their
+        # own view of this list.
+        #
+        # Dave asked for the newest three visible with older ones reachable, so every
+        # link is rendered and the container scrolls, rather than the query being cut
+        # to three and the rest becoming unreachable.
+        if cur_role == 'student' and cur_user == student_number:
+            reading = db.links_newest_first(sql)
+            if reading:
+                p += h2('Worth reading')
+                box = div().classes('link-list')
+                for (lid, title, why, _url) in reading:
+                    item = div().classes('link-item')
+                    # Through /link/<id> rather than straight out, so opening it is
+                    # recorded. target=_blank keeps their progress page where it was.
+                    item += a(title, href=url_for('main.open_link', link_id=lid),
+                              target='_blank', rel='noopener noreferrer'
+                              ).classes('link-title')
+                    if why:
+                        item += div(why).classes('link-why')
+                    box += item
+                p += box
         current_course = None
         for (cid, name, course) in comps:
             if selected and course != selected:
@@ -182,6 +206,112 @@ def endorse():
         else 'You already thanked ' + name + ' today.'
     )
     return redirect(url_for('main.view_student', student_number=user))
+
+
+@main_bp.route('/links')
+def links():
+    # Staff-only curation of the motivational reading (#51). Instructor-curated for
+    # now, Dave's call; TAs and students only ever see the list, not this page.
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    notice = session.pop('links_notice', None)
+    p = page()
+    p += page_header()
+    p += h1('Worth reading')
+    p += div('Short pieces students see on their progress page. The newest three show '
+             'without scrolling, so put the one you most want read at the top by '
+             'adding it last.').classes('subnav')
+    if notice:
+        p += div(notice).classes('queue-notice')
+    with db.cursor() as sql:
+        rows = db.links_newest_first(sql)
+        engagement = db.link_engagement(sql)
+        unread = db.students_with_no_clicks(sql)
+        total_students = sql.execute('select count(*) from students').fetchone()[0]
+    f = form(method='post', action=url_for('main.add_link')).classes('link-add')
+    f += input(type='text', name='title', placeholder='Title', required=True)
+    f += input(type='text', name='why', placeholder='Why this is worth 5 minutes')
+    f += input(type='url', name='url', placeholder='https://...', required=True)
+    f += button('Add', type='submit').classes('roster-link')
+    p += f
+    p += h2('Current list')
+    if not rows:
+        p += div('Nothing added yet.').classes('queue-empty')
+    for (lid, title, why, url) in rows:
+        opened = engagement.get(lid, 0)
+        row = div().classes('progress-row')
+        row += span(title).classes('progress-name')
+        row += span(str(opened) + ' of ' + str(total_students) + ' opened it'
+                    ).classes('progress-badge')
+        drop = form(method='post', action=url_for('main.delete_link', link_id=lid))
+        drop += button('Remove', type='submit').classes('roster-link')
+        row += drop
+        p += row
+        if why:
+            p += div(why).classes('link-why')
+    # The list that makes the click tracking worth having: Dave wanted it "per student
+    # so we can encourage students to stay engaged", and this is who to encourage.
+    if rows:
+        p += h2('Has not opened anything')
+        if not unread:
+            p += div('Everyone has opened at least one. Unusual and good.'
+                     ).classes('queue-empty')
+        for (first, last, _number) in unread:
+            p += div(span(last + ', ' + first).classes('progress-name')
+                     ).classes('progress-row')
+    return str(p)
+
+
+@main_bp.route('/links/add', methods=['POST'])
+def add_link():
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    title = request.form.get('title', '').strip()
+    why = request.form.get('why', '').strip()
+    url = request.form.get('url', '').strip()
+    # Only http(s). The list is instructor-curated, but this page writes a URL the app
+    # later redirects students to, so the scheme is worth pinning down here rather than
+    # trusting a paste.
+    if not title or not url.lower().startswith(('http://', 'https://')):
+        session['links_notice'] = 'Needs a title and an http(s) link.'
+        return redirect(url_for('main.links'))
+    with db.cursor() as sql:
+        db.add_link(sql, title, why, url)
+    return redirect(url_for('main.links'))
+
+
+@main_bp.route('/links/<int:link_id>/delete', methods=['POST'])
+def delete_link(link_id):
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    with db.cursor() as sql:
+        db.remove_link(sql, link_id)
+    return redirect(url_for('main.links'))
+
+
+@main_bp.route('/link/<int:link_id>')
+def open_link(link_id):
+    """Record that this student opened a link, then send them to it (#51).
+
+    The click is the whole reason this hop exists rather than linking straight out:
+    Dave was doubtful students would read any of this, and per-student clicks are what
+    answer that rather than leaving it a guess.
+    """
+    user, role = current_user()
+    if user is None:
+        return redirect(url_for('auth.login'))
+    with db.cursor() as sql:
+        target = db.link_url(sql, link_id)
+        if target is None:
+            return redirect(url_for('main.index'))
+        # Staff previewing the list are not students engaging with it, so their clicks
+        # would only dilute the numbers this page exists to produce.
+        if role == 'student':
+            db.record_link_click(sql, user, link_id)
+    return redirect(target)
 
 
 @main_bp.route('/evaluators')

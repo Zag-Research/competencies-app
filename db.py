@@ -439,6 +439,67 @@ def clear_achievement(sql, student_number, competency_id):
     )
 
 
+def links_newest_first(sql):
+    """Every curated link (#51), newest first, as (id, title, why, url) rows.
+
+    All of them, not just the three the page shows: Dave asked for the last 3 visible
+    with the rest reachable by scrolling, which is a height on the container rather
+    than a limit on the query.
+    """
+    return sql.execute(
+        "select id, title, why, url from links order by added_at desc, id desc"
+    ).fetchall()
+
+
+def add_link(sql, title, why, url):
+    sql.execute(
+        "insert into links (title, why, url, added_at) values (?, ?, ?, CURRENT_TIMESTAMP)",
+        (title, why, url)
+    )
+
+
+def remove_link(sql, link_id):
+    # The clicks go with it: a click on a link nobody can see any more is not a fact
+    # anyone can act on, and leaving them would make the engagement counts refer to
+    # things the instructor has already decided against.
+    sql.execute("delete from link_clicks where link_id = ?", (link_id,))
+    sql.execute("delete from links where id = ?", (link_id,))
+
+
+def link_url(sql, link_id):
+    row = sql.execute("select url from links where id = ?", (link_id,)).fetchone()
+    return row[0] if row else None
+
+
+def record_link_click(sql, student_number, link_id):
+    # insert or ignore: this records WHETHER a student opened it, so a second click is
+    # a no-op rather than a number that could be mistaken for enthusiasm.
+    sql.execute(
+        "insert or ignore into link_clicks (student_number, link_id, clicked_at) "
+        "values (?, ?, CURRENT_TIMESTAMP)",
+        (student_number, link_id)
+    )
+
+
+def link_engagement(sql):
+    """Per link, how many students have opened it: {link_id: count}."""
+    return {lid: n for (lid, n) in sql.execute(
+        "select link_id, count(*) from link_clicks group by link_id").fetchall()}
+
+
+def students_with_no_clicks(sql):
+    """Students who have opened nothing, as (first, last, number), by surname.
+
+    The point of tracking clicks at all, per Dave: "so we can encourage students to
+    stay engaged." This is the list that makes that possible.
+    """
+    return sql.execute(
+        """select first_name, last_name, student_number from students
+            where student_number not in (select student_number from link_clicks)
+            order by last_name, first_name"""
+    ).fetchall()
+
+
 def evaluator_counts(sql, since=None):
     """How many evaluations each staff member has recorded, as {evaluator: count}.
 

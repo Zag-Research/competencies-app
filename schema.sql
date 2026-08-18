@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS link_clicks;
+DROP TABLE IF EXISTS links;
 DROP TABLE IF EXISTS evaluations;
 DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS endorsements;
@@ -90,6 +92,36 @@ CREATE TABLE evaluations (
     evaluated_by TEXT NOT NULL,
     FOREIGN KEY (student_number) REFERENCES students(student_number),
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
+);
+
+-- links: short things worth reading or watching, curated by the instructor (#51).
+-- From the Aug 12 meeting: pieces about what goes wrong when software is written
+-- without a human who actually understands it. Dave was openly unsure students would
+-- read any of them, which is why link_clicks below exists.
+--
+-- Instructor-curated for now, his call. `why` is the one line that has to earn the
+-- click, so it is stored rather than derived from the title.
+CREATE TABLE links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    why TEXT,
+    url TEXT,
+    added_at TEXT
+);
+
+-- link_clicks: which students have opened which link. Dave: "Yes, track
+-- click-throughs, probably per student so we can encourage students to stay engaged."
+--
+-- (student, link) primary key, so this records WHETHER a student opened something, not
+-- how many times. Encouraging a student who has read nothing is the use; a click count
+-- per student would invite reading it as enthusiasm, which it is not.
+CREATE TABLE link_clicks (
+    student_number TEXT,
+    link_id INTEGER,
+    clicked_at TEXT,
+    PRIMARY KEY (student_number, link_id),
+    FOREIGN KEY (student_number) REFERENCES students(student_number),
+    FOREIGN KEY (link_id) REFERENCES links(id)
 );
 
 -- peer helpfulness: one row = a student thanking a classmate who helped them.

@@ -97,5 +97,6 @@ def page_header():
         nav += a('Attendance', href=url_for('main.attendance')).classes('staff-nav-link')
         nav += a('Evaluators', href=url_for('main.evaluators')).classes('staff-nav-link')
         nav += a('Shout-outs', href=url_for('main.endorsements')).classes('staff-nav-link')
+        nav += a('Worth reading', href=url_for('main.links')).classes('staff-nav-link')
         header += nav
     return header

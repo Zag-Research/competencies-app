@@ -490,5 +490,43 @@ ul.competency-scope li {
 .awaiting-row input {
     width: 110px;
     padding: 0.4rem 0.6rem;
+
+/* Worth reading (#51): the newest three fit without scrolling and older ones are
+   reachable inside the box, so the list cannot grow to push the competencies off
+   the page however many the instructor adds. */
+.link-list {
+    max-height: 13rem;
+    overflow-y: auto;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 0.2rem 0.9rem;
+    margin-bottom: 1.6rem;
+}
+.link-item {
+    padding: 0.7rem 0;
+    border-bottom: 1px solid #ececec;
+}
+.link-item:last-child {
+    border-bottom: none;
+}
+.link-title {
+    font-weight: 500;
+}
+.link-why {
+    color: #5f6571;
+    font-size: 0.92rem;
+}
+/* Staff add-a-link form: stacked, so the three fields do not squeeze on a phone. */
+.link-add {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin-bottom: 1.4rem;
+}
+.link-add input {
+    width: 100%;
+    max-width: 420px;
+    padding: 0.45rem 0.6rem;
     font-size: 1rem;
 }
