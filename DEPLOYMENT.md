@@ -25,13 +25,22 @@ Mounted at `/studio1`, not at the root. No code change needed for that:
 Submitted first as CAS 3.0 and corrected the same day, because `mod_auth_cas` cannot
 read attributes over CAS v3. If it ever gets set back, see the warning below.
 
-**What is actually outstanding:**
+**What is actually outstanding**, in the order it blocks things:
 
-1. CCS configuring the service for SAML 1.1 (CAS request #667, with Wayne Lyu).
-2. Access to the host. A student account cannot reach it: SSH is filtered from the
-   Student VPN and TMU-VPN refuses student accounts, so this needs either staff VPN
-   access as well, or someone with access doing the install (#4).
-3. The two empty tables: competencies (#2) and the student roster (#61).
+| # | What | Waiting on |
+|---|------|-----------|
+| 1 | CCS configuring the service for SAML 1.1 (CAS request #667) | Wayne Lyu, CCS |
+| 2 | Access to the host, or someone with access doing the install (#4) | Dave |
+| 3 | A roster importer. It does not exist yet (#61) | nobody, this is buildable now |
+| 4 | The real competency list (#2) | Jonathan |
+| 5 | The real roster data, whatever class list can be exported (#61) | Dave |
+| 6 | TA CAS usernames for the `admins` setting, step 3 below | hiring closing |
+
+A student account cannot reach the host at all: SSH is filtered from the Student VPN,
+and TMU-VPN refuses student accounts. So 2 needs either staff VPN access on top of a
+shell account, or the install done by someone who already has both.
+
+Only 3 is code, and it is the one item nothing else blocks.
 
 ## Identity
 
