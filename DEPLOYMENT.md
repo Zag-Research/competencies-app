@@ -34,10 +34,14 @@ CAS sends two headers and the app needs both:
 
 `Cas-User` never contains the student number, whatever attributes are released.
 
-> **Attributes only arrive through SAML validation.** `mod_auth_cas` has no CAS v3
-> support. Registered as CAS 3.0, login works perfectly and `studentnumber` never
-> arrives. **Staff are unaffected**, so every check a staff account can run would pass
-> and the failure would surface on the first day of class.
+> **Attributes only arrive through SAML validation, and that is our config, not CCS's.**
+> CCS confirmed their end is identical for SAML 1.1 and CAS 2.0/3.0, so the protocol on
+> the registration does not matter. What matters is the vhost: `CASValidateSAML On` with
+> `CASValidateURL` pointing at `/cas/samlValidate`. Point it at `serviceValidate`
+> instead and login works perfectly while `studentnumber` never arrives.
+>
+> **Staff are unaffected** by that, so every check a staff account can run would pass and
+> the failure would surface on the first day of class.
 
 The header name comes from `CASAttributePrefix`, set in our own vhost. Use `CAS-`.
 Never `CAS_`: Apache 2.4 drops headers containing underscores. If the vhost ever uses a
