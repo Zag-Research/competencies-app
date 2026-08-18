@@ -63,14 +63,6 @@ CREATE TABLE requests (
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
 );
 
--- peer helpfulness: one row = a student thanking a classmate who helped them.
--- The instructor folds the received counts into that classmate's course remarks,
--- one of the ways a student earns marks above the ~80% the competencies give.
---
--- The (from, to, day) primary key is the anti-gaming rule in the schema itself:
--- an 'insert or ignore' can only land one thank-you per classmate per day, so a
--- student cannot inflate someone by tapping repeatedly. A fresh day is a fresh
--- row, because they may genuinely have helped again.
 -- evaluations: one row per evaluation that actually took place (#48/#49). Appended,
 -- never overwritten.
 --
@@ -100,6 +92,14 @@ CREATE TABLE evaluations (
     FOREIGN KEY (competency_id) REFERENCES competencies(id)
 );
 
+-- peer helpfulness: one row = a student thanking a classmate who helped them.
+-- The instructor folds the received counts into that classmate's course remarks,
+-- one of the ways a student earns marks above the ~80% the competencies give.
+--
+-- The (from, to, day) primary key is the anti-gaming rule in the schema itself:
+-- an 'insert or ignore' can only land one thank-you per classmate per day, so a
+-- student cannot inflate someone by tapping repeatedly. A fresh day is a fresh
+-- row, because they may genuinely have helped again.
 CREATE TABLE endorsements (
     from_student TEXT,
     to_student TEXT,
@@ -139,6 +139,10 @@ CREATE TABLE enrollments (
 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 INSERT INTO settings VALUES('admins','dmason lfortune');
+-- Which resolved hostnames count as studio lab machines (#46). CS systems' naming is
+-- eng<room>-<machine>, e.g. eng201-01. Kept here rather than in code so a room change,
+-- or relaxing the gate in an emergency mid-session, is a settings edit not a deploy.
+INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
 INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
 -- max competencies a student may request per studio session (#22). Dave: start
 -- at 3 (students finish ~week 9), may bump to 4 later. A setting, so changing it

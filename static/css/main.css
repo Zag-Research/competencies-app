@@ -398,15 +398,6 @@ ul.competency-scope li {
     margin-bottom: 0.1rem;
 }
 
-/* Attendance self check-in on the student queue page. */
-.queue-checkin {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-}
-
 /* Peer shout-out: thank a classmate from a dropdown on your own progress page. */
 .endorse-select {
     padding: 0.4rem 0.5rem;
@@ -483,4 +474,21 @@ ul.competency-scope li {
     margin-top: 0.8rem;
     font-size: 0.95rem;
     color: #5f6571;
+}
+
+/* "Signed up, no seat yet" on the staff queue: a TA can set a student's seat for them
+   when the student's own entry is blocked (#46). One row per student, wrapping on a
+   phone since a TA may well be on one. */
+.awaiting-row form {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #ececec;
+}
+.awaiting-row input {
+    width: 110px;
+    padding: 0.4rem 0.6rem;
+    font-size: 1rem;
 }

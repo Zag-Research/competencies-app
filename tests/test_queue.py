@@ -246,9 +246,14 @@ def test_a_plain_request_can_still_be_cancelled(db):
     assert gone == 0
 
 
-def test_checkin_carries_a_bumped_competency_forward(db, monkeypatch):
-    """Checking in (not just taking a seat) resurfaces a bumped competency, so a
-    student whose only pending item is the bumped one is not stranded (#19/#24)."""
+def test_taking_a_seat_carries_a_bumped_competency_forward(db, monkeypatch):
+    """Showing up resurfaces a bumped competency, so a student whose only pending item
+    is the bumped one is not stranded (#19/#24).
+
+    This used to run through the "I'm here today" button. That button is gone (#46), so
+    the seat form is now shown on any studio day rather than only when something is
+    booked for today, which is what keeps this reachable.
+    """
     from datetime import date
     import app as app_module
     monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 29))  # a Wednesday
@@ -260,7 +265,7 @@ def test_checkin_carries_a_bumped_competency_forward(db, monkeypatch):
     with c.session_transaction() as s:
         s['user'] = '500111111'
         s['role'] = 'student'
-    c.post('/queue/checkin')
+    c.post('/queue/seat', data={'seat': '12'})
     with db.cursor() as sql:
         moved = sql.execute(
             'select studio_date from requests where id = ?', (rid,)

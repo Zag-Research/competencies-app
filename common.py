@@ -3,9 +3,51 @@
 Kept separate so every blueprint can import these without importing each other
 (which would create circular imports).
 """
+import socket
+
 from flask import session, request, url_for, current_app
 from myhtml import *
 import db
+import logic
+
+
+# Reverse DNS is a network call sitting in the request path, so resolved names are
+# cached. Lab machines are stable and there are only a few dozen, so this costs one
+# lookup per machine per process, not one per page view.
+_HOSTNAME_CACHE = {}
+
+
+def request_is_in_lab():
+    """True if this request came from a machine in the studio lab (#46).
+
+    The one location-gated action is a student entering their seat number. Everything
+    else in the app is open from anywhere, per Dave on #46.
+
+    Method from CS systems: reverse-resolve the caller's address and test the name
+    against the lab pattern. The pattern comes from `settings` so the room or its
+    naming can change, and so the gate can be relaxed in an emergency, without a
+    deploy.
+
+    Development is always treated as in-lab, the same bargain current_user() makes
+    with CAS. Requiring a lab machine to work on the app locally would be absurd.
+
+    Failure is treated as "not in the lab". A home address simply has no eng20x-xx
+    name, and that is indistinguishable from DNS being unreachable, so the safe
+    reading of "I could not resolve this" is "not a lab machine".
+    """
+    if current_app.config.get('ENV') != 'production':
+        return True
+    address = request.remote_addr
+    hostname = _HOSTNAME_CACHE.get(address)
+    if hostname is None:
+        try:
+            hostname = socket.gethostbyaddr(address)[0]
+        except OSError:
+            # Not cached: a transient DNS failure must not lock this address out for
+            # the life of the process.
+            return False
+        _HOSTNAME_CACHE[address] = hostname
+    return logic.is_lab_host(hostname, db.get_setting('lab_host_pattern'))
 
 
 def current_user():

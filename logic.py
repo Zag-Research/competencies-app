@@ -4,6 +4,7 @@ No Flask, no database, no HTML in here. Give these functions a value and they
 hand back a rule answer. Because they have no hidden dependencies, this is the
 easiest module in the app to read top-to-bottom and to unit test.
 """
+import re
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -83,9 +84,11 @@ def cooling_off_label(date_recorded):
 # These come from the weekly pattern rather than a full term calendar. Statutory
 # holidays need no special handling: across both the Fall 2026 and Winter 2027 terms
 # they all fall on Mondays or Fridays, off the studio's days. The reading weeks DO land
-# on studio days, so they are listed below and skipped. (Term start/end are not enforced
-# yet, so an out-of-term Tue/Wed/Thu is still offered; harmless because the studio is not
-# in use then. Load real term ranges here if that ever matters.)
+# on studio days, so they are listed below and skipped.
+#
+# Sign-up still offers any Tue/Wed/Thu, in or out of term, which is harmless because the
+# studio is not running then. TERM_START/TERM_END below bound the term for counting
+# sessions (#50); they are not enforced as a sign-up window.
 STUDIO_WEEKDAYS = (1, 2, 3)
 STUDIO_LOOKAHEAD = 6
 
@@ -223,6 +226,34 @@ def pace_note(done_pct, term_pct, elapsed):
     if gap <= -PACE_TOLERANCE:
         return 'The studio is a little ahead of you. Worth picking up the pace.'
     return 'You are keeping pace with the studio.'
+
+
+# Lab machines (#46). Only one action is restricted to being physically in the
+# studio: a student entering their seat number. Dave settled the scope on that issue:
+# "anybody can open it anywhere and has CAS authentication ... Seat number only is an
+# option for a student logged into a lab machine in the lab."
+#
+# The test is not an IP range. CS systems (Aug 17): "All lab machines have an internal
+# dns entry: ie. eng201-01 ... The app should do a reverse dns lookup of the ip address
+# accessing your app. The prefix eng20x-xx format would point to the corresponding lab
+# machine." They also confirmed the machines have unique routable IPs with no NAT in
+# front, so the address the server sees is genuinely the client's.
+#
+# This half is the rule; the reverse lookup itself lives in common.py, because a DNS
+# call is exactly the hidden dependency this module is meant not to have.
+LAB_HOST_PATTERN = r'eng\d{3}-\d+'
+
+
+def is_lab_host(hostname, pattern=None):
+    """True if a resolved hostname names one of the studio lab machines.
+
+    Matches on the first label only, so 'eng201-01.cs.torontomu.ca' and 'eng201-01'
+    both pass and a name that merely contains the pattern later on does not.
+    """
+    if not hostname:
+        return False
+    return re.fullmatch(pattern or LAB_HOST_PATTERN,
+                        hostname.split('.')[0], re.IGNORECASE) is not None
 
 
 # Sign-up limits per studio session (#22). Two rules at once:
