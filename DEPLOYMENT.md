@@ -12,16 +12,26 @@ DNS or certificate request is needed.
 Mounted at `/studio1`, not at the root. No code change needed for that:
 `WSGIScriptAlias /studio1` sets `SCRIPT_NAME` and Flask's `url_for` prefixes every URL.
 
-**One outstanding request: the production CAS registration.** Same [Google
-Form](https://www.torontomu.ca/ccs/services/applications/cas/) as the test one.
+**Production CAS registration: submitted Aug 18**, as registered:
 
 | Field | Value |
 |-------|-------|
 | Service URL | `https://admin.cs.torontomu.ca/studio1` |
 | Environment | Production, `cas.torontomu.ca` |
-| Protocol | SAML 1.1 (not CAS 3.0, see below) |
+| Protocol | SAML 1.1 |
 | Required attributes | `studentnumber` |
 | Hosted at TMU | On Campus |
+
+Submitted first as CAS 3.0 and corrected the same day, because `mod_auth_cas` cannot
+read attributes over CAS v3. If it ever gets set back, see the warning below.
+
+**What is actually outstanding:**
+
+1. CCS configuring the service for SAML 1.1 (CAS request #667, with Wayne Lyu).
+2. Access to the host. A student account cannot reach it: SSH is filtered from the
+   Student VPN and TMU-VPN refuses student accounts, so this needs either staff VPN
+   access as well, or someone with access doing the install (#4).
+3. The two empty tables: competencies (#2) and the student roster (#61).
 
 ## Identity
 
