@@ -175,6 +175,11 @@ INSERT INTO settings VALUES('admins','dmason lfortune');
 -- eng<room>-<machine>, e.g. eng201-01. Kept here rather than in code so a room change,
 -- or relaxing the gate in an emergency mid-session, is a settings edit not a deploy.
 INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
+-- Which migrations this database already contains (#55). A database built from this
+-- file is born with everything, so this must equal the highest number in migrations/,
+-- or migrate.py would try to re-apply a change that is already here. Bump it in the
+-- same commit as any new migration; tests/test_migrations.py fails if it drifts.
+INSERT INTO settings VALUES('schema_version','0');
 INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
 -- max competencies a student may request per studio session (#22). Dave: start
 -- at 3 (students finish ~week 9), may bump to 4 later. A setting, so changing it
