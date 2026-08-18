@@ -99,19 +99,29 @@ Once you have the server and CAS is registered:
    ```
    sqlite3 /var/www/competencies-app/course-data.db < schema.sql
    ```
-3. **File permissions** — SQLite needs the Apache user to write both the DB file **and its
+3. **Set the staff list.** `schema.sql` seeds `admins` with placeholder names, and
+   anyone not on it is not staff. A TA who is also not a known student number resolves
+   to nobody at all and is bounced straight back to the login page, so **getting this
+   wrong locks every TA out of the app on day one**. It takes the instructor's and each
+   TA's **CAS username**, space separated, not their student numbers:
+   ```
+   sqlite3 course-data.db "update settings set value = 'dmason s59hassa ...' where key = 'admins'"
+   ```
+   Collect the usernames before deploy day; they are not guessable from anyone's name.
+
+4. **File permissions** — SQLite needs the Apache user to write both the DB file **and its
    directory** (for the temporary journal), or you get "readonly database" errors:
    ```
    chown www-data:www-data /var/www/competencies-app /var/www/competencies-app/course-data.db
    ```
-4. **Environment** — set these for the app (e.g. in the Apache vhost with `SetEnv`, or the
+5. **Environment** — set these for the app (e.g. in the Apache vhost with `SetEnv`, or the
    WSGI process environment):
    | Variable | Value |
    |----------|-------|
    | `APP_ENV` | `production` — switches identity from the dev `/login` to CAS |
    | `SECRET_KEY` | a long random string, so sessions survive restarts |
    | `DB_PATH` | absolute path to `course-data.db` (the working dir isn't the project folder under Apache) |
-5. **Apache vhost** — protect the app with CAS and hand requests to `wsgi.py`:
+6. **Apache vhost** — protect the app with CAS and hand requests to `wsgi.py`:
    ```apache
    # Existing vhost for admin.cs.torontomu.ca; this app is one location within it,
    # alongside /courses.
@@ -157,7 +167,9 @@ Once you have the server and CAS is registered:
 ## Smoke test after deploying
 
 - Visiting any page redirects through TMU CAS and comes back signed in.
-- A **staff** account (in the `admins` setting) lands on the queue and can mark.
+- **Every TA signs in and is recognised as staff.** Not just one: the whole point of step 3
+  is that a name missing from `admins` is locked out entirely, and that is invisible until
+  that person tries.
 - **A real student account signs in and sees their own progress.** This is the one check
   that cannot be skipped and cannot be done from a staff account. It is the only thing that
   proves SAML validation is on, the attribute is being released, and the header prefix
