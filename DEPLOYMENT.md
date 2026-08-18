@@ -5,19 +5,38 @@ Getting the app live at TMU: Apache + `mod_wsgi` running the Flask app, with TMU
 checklist below); the parts that take real calendar time are the requests to other people,
 so start those first.
 
-## Start these now (they gate the timeline)
+## Where this runs
 
-These depend on TMU IT / whoever owns the server, and their turnaround, not the code, is
-what stretches deployment past a day. Kick them off before touching config:
+**https://admin.cs.torontomu.ca/studio1** — decided by Dave on #4 (Aug 18). It parallels
+the existing `https://admin.cs.torontomu.ca/courses`.
 
-1. **A server / host.** Who provisions it (Dave, the Zag lab, TMU IT)? Need SSH access, and
-   Python 3.11+ available.
-2. **CAS registration.** Ask TMU IT to register the app's URL with CAS so `mod_auth_cas`
-   can authenticate against it. **This is the long-pole item.** Ask specifically: *does CAS
-   release the student number as an attribute, or only the TMU username?* — that answers the
-   one open decision below.
-3. **Network access.** A hostname/DNS entry, and VPN access if the server is inside TMU's
-   network.
+Three things that were expected to take weeks turn out to be already done on that host:
+
+- the machine exists, so no server request and no DNS entry are needed
+- LetsEncrypt is already set up, so the `https` the CAS registration requires is in place
+- CAS already points at the same host for `/courses`
+
+**So there is exactly one outstanding request: submit the production CAS registration**
+(the same Google Form as the test one, linked from
+https://www.torontomu.ca/ccs/services/applications/cas/), with:
+
+| Field | Value |
+|-------|-------|
+| Service URL | `https://admin.cs.torontomu.ca/studio1` |
+| Environment | Production — `cas.torontomu.ca` |
+| Protocol | CAS 3.0 (needed for attributes) |
+| Required attributes | `studentnumber` |
+| Hosted at TMU | On Campus |
+
+Its approval turnaround is now the only thing between here and being live, which is why
+it goes in before any config work.
+
+### Note on the sub-path
+
+The app is mounted at `/studio1`, not at the root of the host. Nothing in the code has to
+change for that: `WSGIScriptAlias /studio1` makes Apache set `SCRIPT_NAME`, and Flask's
+`url_for` prefixes every generated URL accordingly. The one thing to check in the smoke
+test is that links and form actions come out as `/studio1/...` rather than `/...`.
 
 ## The one decision to settle: student identity
 
@@ -34,7 +53,13 @@ will give their **TMU username**, which is not the same string. Two ways to brid
   look the student up by it.
 
 The single place to adjust is `identity_from_cas` in `common.py` (one function, marked with
-this note). Pick A or B once TMU IT answers question 2 above.
+this note).
+
+**A is very likely.** `studentnumber` is one of the attributes the CAS Service Request Form
+offers, and it was requested on the test registration (CCS request #667, configured Aug 17).
+Their own note says attributes are "subject to approval / privacy impact assessment", so
+confirm it is actually being released before assuming A: sign in as a student and check what
+`Cas-User` contains. If it is a username rather than a number, switch to B.
 
 ## Server setup (checklist)
 
@@ -63,24 +88,33 @@ Once you have the server and CAS is registered:
    | `DB_PATH` | absolute path to `course-data.db` (the working dir isn't the project folder under Apache) |
 5. **Apache vhost** — protect the app with CAS and hand requests to `wsgi.py`:
    ```apache
+   # Existing vhost for admin.cs.torontomu.ca; this app is one location within it,
+   # alongside /courses.
    <VirtualHost *:443>
-       ServerName competencies.example.torontomu.ca
+       ServerName admin.cs.torontomu.ca
 
-       <Location />
+       <Location /studio1>
            AuthType CAS
            Require valid-user
            # mod_auth_cas must SET Cas-User itself and strip any client-supplied one.
+           # CAS 3.0 attribute release has to be on, or studentnumber never arrives
+           # and identity_from_cas falls back to option B.
        </Location>
 
-       WSGIDaemonProcess competencies python-home=/var/www/competencies-app/venv
-       WSGIProcessGroup competencies
-       WSGIScriptAlias / /var/www/competencies-app/wsgi.py
+       WSGIDaemonProcess studio1 python-home=/var/www/competencies-app/venv
+       WSGIProcessGroup studio1
+       WSGIScriptAlias /studio1 /var/www/competencies-app/wsgi.py
 
        SetEnv APP_ENV production
        SetEnv DB_PATH /var/www/competencies-app/course-data.db
        # SECRET_KEY is better set on WSGIDaemonProcess so it isn't world-readable in the vhost.
    </VirtualHost>
    ```
+
+   Do **not** put a reverse proxy in front of this. The lab-machine check (#46) reverse-
+   resolves `remote_addr`, so the app has to see the student's real address. CS systems
+   confirmed the lab machines have unique routable IPs with no NAT, and a proxy here would
+   undo that and make every request look like it came from the server itself.
 
 ## Smoke test after deploying
 
@@ -91,9 +125,35 @@ Once you have the server and CAS is registered:
 - Restart Apache: existing sessions still work (confirms `SECRET_KEY` is set, not the dev
   fallback).
 
+## Updating the app after it is live
+
+Code changes are cheap:
+
+```
+git pull
+touch wsgi.py          # mod_wsgi reloads on the timestamp; no restart needed
+```
+
+Schema changes are not. Right now a schema change means rebuilding `course-data.db` from
+`schema.sql`, which is free in development and **destroys student results** in production.
+That is #55, and it needs to exist before the second deploy, not the first.
+
+Until then: **take a dated backup before touching anything**, and never run `schema.sql`
+against the live database.
+
+```
+cp course-data.db "course-data.db.$(date +%F)"
+```
+
+Dave's preference on #55 is a date stamp, no finer granularity, so one backup per day is
+the intended shape. Deploy between studio sessions, never during one: a reload mid-marking
+loses a TA's in-progress work.
+
 ## What's still not automated
 
-- **Term boundaries.** The studio skips reading weeks, but still offers out-of-term Tue/Wed/Thu
-  (summer, between terms). Harmless while the studio isn't running; load real term ranges into
-  `logic.py` if it ever matters.
-- **Backups.** `course-data.db` is a single file, copy it on a schedule.
+- **Term boundaries as a sign-up window.** `TERM_START` / `TERM_END` in `logic.py` bound the
+  term for counting the studio's 36 sessions (#50), but sign-up still offers any Tue/Wed/Thu,
+  in or out of term. Harmless while the studio isn't running.
+- **Migrations.** See above, and #55.
+- **Backups on a schedule.** The command above is manual. `course-data.db` is a single file,
+  so any cron job that copies it with a date stamp will do.
