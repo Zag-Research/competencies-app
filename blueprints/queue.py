@@ -149,6 +149,37 @@ def queue_seat():
     return redirect(url_for('queue.queue'))
 
 
+@queue_bp.route('/queue/seat-for/<student_number>', methods=['POST'])
+def queue_seat_for(student_number):
+    """A TA sets a student's seat on their behalf (#46).
+
+    The student's own seat entry is gated to lab machines, which is right for a
+    self-report but leaves no way out when the gate misfires: a DNS blip, a machine
+    with no reverse entry, a student on their own laptop. Without this the studio
+    stops, because a student with no seat is invisible to every TA.
+
+    Deliberately NOT lab-gated itself. A TA on an iPad is on wifi, and gating the
+    escape hatch on the thing that just failed would make it useless. What makes it
+    trustworthy is that a TA is standing in the room asserting the student is there,
+    which is a better signal than the self-report it replaces.
+    """
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    seat = request.form.get('seat', '').strip()
+    today = logic.today_toronto().isoformat()
+    if not seat or not logic.is_studio_day(today):
+        return redirect(url_for('queue.queue'))
+    with db.cursor() as sql:
+        db.carry_bumped_forward(sql, student_number, today)
+        db.set_seat(sql, student_number, seat, today)
+        # A TA saying where a student is sitting is a stronger "they are here" than the
+        # student saying it themselves, so it marks attendance the same way.
+        db.mark_present(sql, student_number, today)
+    session['queue_notice'] = 'Seat ' + seat + ' set for that student.'
+    return redirect(url_for('queue.queue'))
+
+
 @queue_bp.route('/queue/cancel/<int:request_id>', methods=['POST'])
 def queue_cancel(request_id):
     user, role = current_user()

@@ -105,6 +105,28 @@ AVAILABLE = """(studio_date = ?
                      or (status = 'claimed' and claimed_at < datetime('now', ?))))"""
 
 
+def students_awaiting_seat(sql, studio_date):
+    """Students booked for `studio_date` who have no seat yet, by surname.
+
+    They are invisible on the live queue by design: AVAILABLE requires a seat, because
+    a claim means walking over to someone, and there is nowhere to walk to. But staff
+    still need to reach them, both to see who has booked and not turned up, and to set
+    a seat on their behalf when the student cannot (#46).
+
+    Returns (student_number, first, last, how_many_competencies).
+    """
+    return sql.execute(
+        """select r.student_number, s.first_name, s.last_name, count(*)
+             from requests r
+             join students s on r.student_number = s.student_number
+            where r.studio_date = ? and r.status = 'waiting'
+              and (r.seat is null or r.seat = '')
+            group by r.student_number, s.first_name, s.last_name
+            order by s.last_name, s.first_name""",
+        (studio_date,)
+    ).fetchall()
+
+
 def set_seat(sql, student_number, seat, studio_date):
     # The student arrived and sat down (or moved machines). One seat per student per
     # studio day: scoped to this session so sitting down today does not stamp a seat

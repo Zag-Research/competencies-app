@@ -155,3 +155,84 @@ def test_development_is_always_treated_as_in_the_lab(db, monkeypatch):
         s['role'] = 'student'
     client.post('/queue/seat', data={'seat': '12'})
     assert attendance_count() == 1
+
+
+# --- the escape hatch: a TA sets a seat for a student ----------------------
+
+@pytest.fixture
+def booked(db, monkeypatch):
+    """A student booked for today's session, with no seat, so invisible to staff."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))
+    with db_module.cursor() as sql:
+        sql.execute(
+            """insert into requests
+                   (student_number, competency_id, requested_at, status, studio_date)
+               values ('500111111', 1, CURRENT_TIMESTAMP, 'waiting', ?)""",
+            (TUE,))
+    return db
+
+
+def staff_client():
+    import app as app_module
+    client = app_module.app.test_client()
+    with client.session_transaction() as s:
+        s['user'] = 'dmason'
+        s['role'] = 'staff'
+    return client
+
+
+def seat_of(student='500111111'):
+    with db_module.cursor() as sql:
+        return sql.execute(
+            'select seat from requests where student_number = ?', (student,)
+        ).fetchone()[0]
+
+
+def test_a_seatless_student_is_listed_for_staff(booked):
+    """They are not claimable, but staff must be able to see and reach them."""
+    body = staff_client().get('/queue').get_data(as_text=True)
+    assert 'Signed up, no seat yet' in body
+    assert 'Chen, Alice' in body
+
+
+def test_a_ta_can_set_a_students_seat(booked):
+    staff_client().post('/queue/seat-for/500111111', data={'seat': '14'})
+    assert seat_of() == '14'
+    assert attendance_count() == 1
+
+
+def test_the_override_is_not_itself_lab_gated(booked, in_production, monkeypatch):
+    """Gating the escape hatch on the thing that just failed would make it useless.
+
+    A TA is on an iPad on wifi, which never resolves to a lab machine, and the whole
+    point is to rescue a session when the student's own gate misfires.
+    """
+    resolves_to(monkeypatch, 'some-ipad-on-wifi')
+    import app as app_module
+    app_module.app.test_client().post(
+        '/queue/seat-for/500111111', data={'seat': '14'},
+        headers={'Cas-User': 'dmason'})
+    assert seat_of() == '14'
+
+
+def test_a_student_cannot_seat_themselves_through_the_override(booked):
+    """Otherwise it is just the lab gate with an extra step."""
+    import app as app_module
+    client = app_module.app.test_client()
+    with client.session_transaction() as s:
+        s['user'] = '500111111'
+        s['role'] = 'student'
+    client.post('/queue/seat-for/500111111', data={'seat': '14'})
+    assert seat_of() is None
+    assert attendance_count() == 0
+
+
+def test_the_override_needs_an_actual_seat(booked):
+    staff_client().post('/queue/seat-for/500111111', data={'seat': '  '})
+    assert seat_of() is None
+
+
+def test_the_override_does_nothing_off_a_studio_day(db, monkeypatch):
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 25))  # Saturday
+    staff_client().post('/queue/seat-for/500111111', data={'seat': '14'})
+    assert attendance_count() == 0

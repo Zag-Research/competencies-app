@@ -260,14 +260,36 @@ def queue_staff_view(group_by='student', day=None):
                     order by r.requested_at""",
                 (day, db.claim_cutoff())
             ).fetchall()
-    if not rows:
+        # Students booked today with no seat yet. Invisible on the queue above by
+        # design (a claim means walking over to someone, and there is nowhere to walk
+        # to), but staff still need to see who has not turned up, and to set a seat on
+        # a student's behalf when the student cannot: a DNS blip, a machine with no
+        # reverse entry, their own laptop (#46). Only for the live session; on a future
+        # one nobody has a seat yet and the list would be everybody.
+        awaiting = [] if planning else db.students_awaiting_seat(sql, day)
+    if not rows and not awaiting:
         empty = 'Queue is empty.' if not planning else 'Nobody has booked this session yet.'
         p += div(empty).classes('queue-empty')
         return str(p)
-    if group_by == 'competency':
+    if rows and group_by == 'competency':
         p += queue_by_competency(rows, day, claimable=not planning, evaluator=evaluator)
-    else:
+    elif rows:
         p += queue_by_student(rows, day, claimable=not planning, evaluator=evaluator)
+    if awaiting:
+        p += h2('Signed up, no seat yet')
+        p += div('These students booked this session but are not showing as seated, so '
+                 'nobody can claim them. If one of them is in front of you, put their '
+                 'seat in here.').classes('subnav')
+        for (number, first, last, how_many) in awaiting:
+            f = form(method='post',
+                     action=url_for('queue.queue_seat_for', student_number=number))
+            f += span(last + ', ' + first).classes('progress-name')
+            f += span(str(how_many)
+                      + (' competency' if how_many == 1 else ' competencies')
+                      ).classes('progress-badge')
+            f += input(type='text', name='seat', placeholder='Seat')
+            f += button('Set seat', type='submit').classes('roster-link')
+            p += div(f).classes('awaiting-row')
     return str(p)
 
 
