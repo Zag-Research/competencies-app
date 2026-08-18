@@ -1,7 +1,15 @@
 # Deployment
 
-How to install and run this. Flask under Apache + `mod_wsgi`, with TMU CAS in front
-via `mod_auth_cas`. Live status of what is outstanding is on #4, not here.
+How to install and run this. Live status of what is outstanding is on #4, not here.
+
+Three pieces, and two words that come up throughout:
+
+- **Apache** is the web server. Its config for one site is called a **vhost**, short for
+  virtual host, and one machine can serve several.
+- **mod_wsgi** is the adapter that lets Apache run a Python app. WSGI is just the name
+  of the handover between them. `wsgi.py` is the one-line file that hands over our app.
+- **mod_auth_cas** puts TMU login in front, so Apache checks who you are before the app
+  ever sees the request.
 
 ## Where it runs
 
@@ -9,8 +17,8 @@ via `mod_auth_cas`. Live status of what is outstanding is on #4, not here.
 host (Dave, #4). That host already has LetsEncrypt and already has CAS, so no server,
 DNS or certificate request is needed.
 
-Mounted at `/studio1`, not at the root. No code change needed for that:
-`WSGIScriptAlias /studio1` sets `SCRIPT_NAME` and Flask's `url_for` prefixes every URL.
+Mounted at `/studio1`, not at the root. No code change needed: `WSGIScriptAlias` tells
+Flask about the prefix and it adjusts every link automatically.
 
 The CAS service is registered for this URL with SAML 1.1 and the `studentnumber`
 attribute.
@@ -102,7 +110,7 @@ update settings set value = 'CAS-somethingelse' where key = 'cas_student_number_
    No reverse proxy in front. The lab check (#46) reverse-resolves `remote_addr`, and a
    proxy would make every request look like it came from the server.
 
-## Smoke test
+## Check it works, right after installing
 
 - Any page redirects through CAS and comes back signed in.
 - Links come out as `/studio1/...`, not `/...`.
@@ -147,9 +155,3 @@ tail -f /var/log/apache2/error.log
 ```
 A Python traceback there is an app bug. A CAS or `mod_auth_cas` message is a config
 problem, and the identity section above is where to start.
-
-## Not automated
-
-- Sign-up offers any Tue/Wed/Thu, in or out of term. `TERM_START`/`TERM_END` bound the
-  term for counting sessions (#50), not for sign-up. Harmless while the studio is closed.
-- Backups are manual. Any cron job that copies the file with a date stamp will do.
