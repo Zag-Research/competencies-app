@@ -134,26 +134,26 @@ git pull
 touch wsgi.py          # mod_wsgi reloads on the timestamp; no restart needed
 ```
 
-Schema changes are not. Right now a schema change means rebuilding `course-data.db` from
-`schema.sql`, which is free in development and **destroys student results** in production.
-That is #55, and it needs to exist before the second deploy, not the first.
-
-Until then: **take a dated backup before touching anything**, and never run `schema.sql`
-against the live database.
+Schema changes go through migrations. **Never run `schema.sql` against the live
+database** — it drops every table, which in production means destroying student results.
 
 ```
-cp course-data.db "course-data.db.$(date +%F)"
+./venv/bin/python migrate.py            # what is pending
+./venv/bin/python migrate.py --apply    # dated backup, then apply
 ```
 
-Dave's preference on #55 is a date stamp, no finer granularity, so one backup per day is
-the intended shape. Deploy between studio sessions, never during one: a reload mid-marking
-loses a TA's in-progress work.
+`--apply` copies the database to `course-data.db.YYYY-MM-DD` before touching anything, and
+that copy is the recovery path if a migration fails halfway. A second run on the same day
+reuses the same file, per Dave on #55: a date stamp, no finer granularity. See
+`migrations/README.md` for adding one.
+
+Deploy between studio sessions, never during one: a reload mid-marking loses a TA's
+in-progress work.
 
 ## What's still not automated
 
 - **Term boundaries as a sign-up window.** `TERM_START` / `TERM_END` in `logic.py` bound the
   term for counting the studio's 36 sessions (#50), but sign-up still offers any Tue/Wed/Thu,
   in or out of term. Harmless while the studio isn't running.
-- **Migrations.** See above, and #55.
 - **Backups on a schedule.** The command above is manual. `course-data.db` is a single file,
   so any cron job that copies it with a date stamp will do.
