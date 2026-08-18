@@ -180,6 +180,12 @@ INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
 -- or migrate.py would try to re-apply a change that is already here. Bump it in the
 -- same commit as any new migration; tests/test_migrations.py fails if it drifts.
 INSERT INTO settings VALUES('schema_version','0');
+-- Which header mod_auth_cas publishes the student number in (see DEPLOYMENT.md). It is
+-- named <CASAttributePrefix><name>, and CASAttributePrefix is set in OUR Apache vhost,
+-- not on the CAS server, so we choose it: use CAS- (the Apache 2.4 default), never the
+-- old CAS_, because Apache 2.4 drops headers containing underscores. A setting so that
+-- if the vhost ever uses a different prefix, matching it is a row update.
+INSERT INTO settings VALUES('cas_student_number_header','CAS-studentnumber');
 INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
 -- max competencies a student may request per studio session (#22). Dave: start
 -- at 3 (students finish ~week 9), may bump to 4 later. A setting, so changing it

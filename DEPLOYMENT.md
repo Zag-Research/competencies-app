@@ -24,7 +24,7 @@ https://www.torontomu.ca/ccs/services/applications/cas/), with:
 |-------|-------|
 | Service URL | `https://admin.cs.torontomu.ca/studio1` |
 | Environment | Production — `cas.torontomu.ca` |
-| Protocol | CAS 3.0 (needed for attributes) |
+| Protocol | **SAML 1.1** (see below; CAS 3.0 was submitted first and corrected) |
 | Required attributes | `studentnumber` |
 | Hosted at TMU | On Campus |
 
@@ -38,28 +38,55 @@ change for that: `WSGIScriptAlias /studio1` makes Apache set `SCRIPT_NAME`, and 
 `url_for` prefixes every generated URL accordingly. The one thing to check in the smoke
 test is that links and form actions come out as `/studio1/...` rather than `/...`.
 
-## The one decision to settle: student identity
+## How identity arrives from CAS
 
-Staff already work: their CAS username is the admin key (the `admins` setting), so
-`identity_from_cas` resolves them to `staff` with no extra work.
+CAS sends **two** things, and the app needs both:
 
-Students are the open piece. Today a student signs in with their **student number**, but CAS
-will give their **TMU username**, which is not the same string. Two ways to bridge it:
+| Header | Carries | Set by |
+|--------|---------|--------|
+| `Cas-User` | the TMU **username**, e.g. `achen` | `mod_auth_cas` via `CASAuthNHeader` |
+| `CAS-studentnumber` | the **student number**, e.g. `500111111` | attribute release, named `<CASAttributePrefix><attr>` |
 
-- **A. CAS releases the student number** as an attribute. Then Apache sets `Cas-User` to the
-  number and nothing else changes, `identity_from_cas` already treats `Cas-User` as the
-  student key.
-- **B. Add a `cas_username` column** to `students`, populated from the course roster, and
-  look the student up by it.
+Staff resolve from the first: their CAS username is already the admin key in the `admins`
+setting. Students resolve from the second, because this app keys students on the student
+number and that is a different string from their username.
 
-The single place to adjust is `identity_from_cas` in `common.py` (one function, marked with
-this note).
+**An earlier version of this document was wrong about that.** It claimed CAS could put the
+student number into `Cas-User` itself, so nothing would need changing. `mod_auth_cas` does
+not work that way: it publishes attributes as their own headers and leaves `CASAuthNHeader`
+as the username. Had that gone to production unchanged, no student would have resolved,
+and we would have found out on the first day of class.
 
-**A is very likely.** `studentnumber` is one of the attributes the CAS Service Request Form
-offers, and it was requested on the test registration (CCS request #667, configured Aug 17).
-Their own note says attributes are "subject to approval / privacy impact assessment", so
-confirm it is actually being released before assuming A: sign in as a student and check what
-`Cas-User` contains. If it is a username rather than a number, switch to B.
+### Attributes need SAML validation, not CAS 3.0
+
+This is the part most likely to bite, because it fails silently.
+
+`mod_auth_cas` passes attributes to the application only when `CASValidateSAML On` is set
+and `CASValidateURL` points at a **SAML** endpoint. Its documentation covers CAS v1, v2 and
+SAML 1.1; there is **no CAS v3 support**, so `/p3/serviceValidate` cannot deliver attributes
+here however the service is registered.
+
+The first production registration was submitted as CAS 3.0 and corrected to SAML 1.1 on
+Aug 18. If it ever gets set back to CAS 3.0, login will still work perfectly and
+`studentnumber` will simply never arrive.
+
+Which is the trap: **staff would be completely unaffected.** Their identity comes from
+`Cas-User`, which is always present. Every check a staff account can run would pass, and the
+failure would appear on the first day of class, as a room of first-years who cannot sign in.
+
+### The header name is ours, not theirs
+
+`CASAttributePrefix` is set in our own Apache vhost, not on CCS's CAS server, so we choose
+it. Use `CAS-` (the Apache 2.4 default). Not `CAS_`: Apache 2.4 drops headers containing
+underscores, so the old default silently loses every attribute.
+
+That makes `studentnumber` arrive as `CAS-studentnumber`, which is what the
+`cas_student_number_header` setting defaults to. If the vhost ever uses a different prefix,
+match it with a row update rather than a code change:
+
+```sql
+update settings set value = 'CAS-somethingelse' where key = 'cas_student_number_header';
+```
 
 ## Server setup (checklist)
 
@@ -96,9 +123,22 @@ Once you have the server and CAS is registered:
        <Location /studio1>
            AuthType CAS
            Require valid-user
+
+           # Attributes reach the app ONLY through SAML validation. mod_auth_cas has no
+           # CAS v3 support, so /p3/serviceValidate is not an option: without these two
+           # lines login still works and studentnumber silently never arrives.
+           CASValidateSAML On
+           CASValidateURL https://cas.torontomu.ca/cas/samlValidate
+
+           # Publishes the username as Cas-User AND each attribute as a header. Attribute
+           # headers are only emitted when this is set.
+           CASAuthNHeader Cas-User
+           # Header names become <prefix><attr>, so studentnumber -> CAS-studentnumber,
+           # which is what the cas_student_number_header setting expects. Do NOT use the
+           # old CAS_ default: Apache 2.4 drops headers containing underscores.
+           CASAttributePrefix CAS-
+
            # mod_auth_cas must SET Cas-User itself and strip any client-supplied one.
-           # CAS 3.0 attribute release has to be on, or studentnumber never arrives
-           # and identity_from_cas falls back to option B.
        </Location>
 
        WSGIDaemonProcess studio1 python-home=/var/www/competencies-app/venv
@@ -120,8 +160,11 @@ Once you have the server and CAS is registered:
 
 - Visiting any page redirects through TMU CAS and comes back signed in.
 - A **staff** account (in the `admins` setting) lands on the queue and can mark.
-- A **student** account sees only their own progress (confirms the identity mapping from the
-  decision above works).
+- **A real student account signs in and sees their own progress.** This is the one check
+  that cannot be skipped and cannot be done from a staff account. It is the only thing that
+  proves SAML validation is on, the attribute is being released, and the header prefix
+  matches. If it fails, look at the request headers first: `Cas-User` present but no
+  `CAS-studentnumber` means attribute release is not reaching us.
 - Restart Apache: existing sessions still work (confirms `SECRET_KEY` is set, not the dev
   fallback).
 
