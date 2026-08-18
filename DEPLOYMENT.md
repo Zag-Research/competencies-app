@@ -24,7 +24,7 @@ https://www.torontomu.ca/ccs/services/applications/cas/), with:
 |-------|-------|
 | Service URL | `https://admin.cs.torontomu.ca/studio1` |
 | Environment | Production — `cas.torontomu.ca` |
-| Protocol | **SAML 1.1** (see below; CAS 3.0 was submitted first and corrected) |
+| Protocol | **SAML 1.1** — required by `mod_auth_cas`, see below |
 | Required attributes | `studentnumber` |
 | Hosted at TMU | On Campus |
 
@@ -51,11 +51,9 @@ Staff resolve from the first: their CAS username is already the admin key in the
 setting. Students resolve from the second, because this app keys students on the student
 number and that is a different string from their username.
 
-**An earlier version of this document was wrong about that.** It claimed CAS could put the
-student number into `Cas-User` itself, so nothing would need changing. `mod_auth_cas` does
-not work that way: it publishes attributes as their own headers and leaves `CASAuthNHeader`
-as the username. Had that gone to production unchanged, no student would have resolved,
-and we would have found out on the first day of class.
+`Cas-User` never contains the student number, whatever attributes CAS releases.
+`mod_auth_cas` publishes attributes as their own headers and keeps `CASAuthNHeader` for the
+username, so the two must be read separately.
 
 ### Attributes need SAML validation, not CAS 3.0
 
@@ -66,13 +64,13 @@ and `CASValidateURL` points at a **SAML** endpoint. Its documentation covers CAS
 SAML 1.1; there is **no CAS v3 support**, so `/p3/serviceValidate` cannot deliver attributes
 here however the service is registered.
 
-The first production registration was submitted as CAS 3.0 and corrected to SAML 1.1 on
-Aug 18. If it ever gets set back to CAS 3.0, login will still work perfectly and
-`studentnumber` will simply never arrive.
+If the service is ever registered as CAS 3.0, login still works perfectly and
+`studentnumber` simply never arrives.
 
-Which is the trap: **staff would be completely unaffected.** Their identity comes from
-`Cas-User`, which is always present. Every check a staff account can run would pass, and the
-failure would appear on the first day of class, as a room of first-years who cannot sign in.
+That is the trap, and it is why this has its own section: **staff are completely
+unaffected.** Their identity comes from `Cas-User`, which is always present. Every check a
+staff account can run would pass, and the failure would surface on the first day of class,
+as a room of first-years who cannot sign in.
 
 ### The header name is ours, not theirs
 
