@@ -1,7 +1,7 @@
 # Deployment
 
-Flask under Apache + `mod_wsgi`, with TMU CAS in front via `mod_auth_cas`.
-The code is ready. What is left is access and two empty tables.
+How to install and run this. Flask under Apache + `mod_wsgi`, with TMU CAS in front
+via `mod_auth_cas`. Live status of what is outstanding is on #4, not here.
 
 ## Where it runs
 
@@ -12,35 +12,8 @@ DNS or certificate request is needed.
 Mounted at `/studio1`, not at the root. No code change needed for that:
 `WSGIScriptAlias /studio1` sets `SCRIPT_NAME` and Flask's `url_for` prefixes every URL.
 
-**Production CAS registration: submitted Aug 18**, as registered:
-
-| Field | Value |
-|-------|-------|
-| Service URL | `https://admin.cs.torontomu.ca/studio1` |
-| Environment | Production, `cas.torontomu.ca` |
-| Protocol | SAML 1.1 |
-| Required attributes | `studentnumber` |
-| Hosted at TMU | On Campus |
-
-Submitted first as CAS 3.0 and corrected the same day, because `mod_auth_cas` cannot
-read attributes over CAS v3. If it ever gets set back, see the warning below.
-
-**What is actually outstanding**, in the order it blocks things:
-
-| # | What | Waiting on |
-|---|------|-----------|
-| 1 | CCS configuring the service for SAML 1.1 (CAS request #667) | Wayne Lyu, CCS |
-| 2 | Access to the host, or someone with access doing the install (#4) | Dave |
-| 3 | A roster importer. It does not exist yet (#61) | nobody, this is buildable now |
-| 4 | The real competency list (#2) | Jonathan |
-| 5 | The real roster data, whatever class list can be exported (#61) | Dave |
-| 6 | TA CAS usernames for the `admins` setting, step 3 below | hiring closing |
-
-A student account cannot reach the host at all: SSH is filtered from the Student VPN,
-and TMU-VPN refuses student accounts. So 2 needs either staff VPN access on top of a
-shell account, or the install done by someone who already has both.
-
-Only 3 is code, and it is the one item nothing else blocks.
+The CAS service is registered for this URL with SAML 1.1 and the `studentnumber`
+attribute.
 
 ## Identity
 
@@ -157,6 +130,23 @@ The backup at `course-data.db.YYYY-MM-DD` is the recovery path if a migration fa
 halfway. See `migrations/README.md` to add one.
 
 Deploy between studio sessions. A reload mid-marking loses a TA's in-progress work.
+
+**Rolling back a bad deploy.** Code only, and it is as fast as deploying:
+```
+git log --oneline -5
+git checkout <previous-commit>
+touch wsgi.py
+```
+If the bad deploy included a migration, restore the dated backup as well. That is why
+`migrate.py --apply` takes one before touching anything.
+
+**When something breaks, look here first.** The app has no log of its own; under
+`mod_wsgi` everything Flask writes goes to Apache's error log:
+```
+tail -f /var/log/apache2/error.log
+```
+A Python traceback there is an app bug. A CAS or `mod_auth_cas` message is a config
+problem, and the identity section above is where to start.
 
 ## Not automated
 
