@@ -38,28 +38,42 @@ change for that: `WSGIScriptAlias /studio1` makes Apache set `SCRIPT_NAME`, and 
 `url_for` prefixes every generated URL accordingly. The one thing to check in the smoke
 test is that links and form actions come out as `/studio1/...` rather than `/...`.
 
-## The one decision to settle: student identity
+## How identity arrives from CAS
 
-Staff already work: their CAS username is the admin key (the `admins` setting), so
-`identity_from_cas` resolves them to `staff` with no extra work.
+CAS sends **two** things, and the app needs both:
 
-Students are the open piece. Today a student signs in with their **student number**, but CAS
-will give their **TMU username**, which is not the same string. Two ways to bridge it:
+| Header | Carries | Set by |
+|--------|---------|--------|
+| `Cas-User` | the TMU **username**, e.g. `achen` | `mod_auth_cas` via `CASAuthNHeader` |
+| `CAS-studentnumber` | the **student number**, e.g. `500111111` | attribute release, named `<CASAttributePrefix><attr>` |
 
-- **A. CAS releases the student number** as an attribute. Then Apache sets `Cas-User` to the
-  number and nothing else changes, `identity_from_cas` already treats `Cas-User` as the
-  student key.
-- **B. Add a `cas_username` column** to `students`, populated from the course roster, and
-  look the student up by it.
+Staff resolve from the first: their CAS username is already the admin key in the `admins`
+setting. Students resolve from the second, because this app keys students on the student
+number and that is a different string from their username.
 
-The single place to adjust is `identity_from_cas` in `common.py` (one function, marked with
-this note).
+**An earlier version of this document was wrong about that.** It claimed CAS could put the
+student number into `Cas-User` itself, so nothing would need changing. `mod_auth_cas` does
+not work that way: it publishes attributes as their own headers and leaves `CASAuthNHeader`
+as the username. Had that gone to production unchanged, no student would have resolved,
+and we would have found out on the first day of class.
 
-**A is very likely.** `studentnumber` is one of the attributes the CAS Service Request Form
-offers, and it was requested on the test registration (CCS request #667, configured Aug 17).
-Their own note says attributes are "subject to approval / privacy impact assessment", so
-confirm it is actually being released before assuming A: sign in as a student and check what
-`Cas-User` contains. If it is a username rather than a number, switch to B.
+### The prefix is their config, not ours
+
+`CASAttributePrefix` defaults to `CAS_` on Apache 2.2 and `CAS-` on 2.4, and Apache 2.4
+drops headers containing underscores, so a 2.4 deployment cannot use the old default. Which
+means the exact header name is CCS's choice.
+
+So it is a setting, `cas_student_number_header`, defaulting to `CAS-studentnumber`. If CCS
+confirms a different prefix, that is a row update rather than a code change:
+
+```sql
+update settings set value = 'CAS-studentnumber' where key = 'cas_student_number_header';
+```
+
+Two things to confirm with CCS (asked on request #667, Aug 18):
+
+1. the `CASAttributePrefix` in their config, so the setting above matches
+2. that `CASAuthNHeader` is set, since attribute headers are only published when it is
 
 ## Server setup (checklist)
 

@@ -59,24 +59,48 @@ def current_user():
     session, so no CAS or Apache is needed locally.
     """
     if current_app.config.get('ENV') == 'production':
-        return identity_from_cas(request.headers.get('Cas-User'))
+        return identity_from_cas(request.headers.get('Cas-User'),
+                                 request.headers.get(student_number_header()))
     return session.get('user'), session.get('role')
 
 
-def identity_from_cas(cas_user):
-    """Map a TMU CAS username to (user, role); (None, None) if unrecognized.
+# Which request header carries the student number CAS releases. mod_auth_cas publishes
+# each attribute as <CASAttributePrefix><name>, and the prefix is a server-side config
+# choice (its default is CAS_ on Apache 2.2 and CAS- on 2.4; Apache 2.4 drops headers
+# containing underscores, so a 2.4 deployment cannot use the old default). A setting, so
+# matching whatever CCS configured is a row update rather than a deploy.
+DEFAULT_STUDENT_NUMBER_HEADER = 'CAS-studentnumber'
 
-    Staff resolve directly: their CAS username is already the admin key. Students are the
-    one open deployment decision: a student's CAS username is NOT their student_number, so
-    either TMU CAS must release the student number (then cas_user already is it), or a
-    cas_username column on `students` maps it. Until that is settled this treats cas_user
-    as the student key, which is correct for staff and for the CAS-releases-number setup.
-    See DEPLOYMENT.md.
+
+def student_number_header():
+    return db.get_setting('cas_student_number_header', DEFAULT_STUDENT_NUMBER_HEADER)
+
+
+def identity_from_cas(cas_user, student_number=None):
+    """Map what CAS told us about this request to (user, role); (None, None) if unknown.
+
+    Two headers, because CAS sends two different things and the app needs both:
+
+    - `Cas-User` is the TMU **username** (mod_auth_cas sets it from CASAuthNHeader). It is
+      always present, and for staff it is the whole answer: their CAS username is already
+      the admin key.
+    - the attribute header carries the **student number**, which is a different string
+      from the username. This app keys students on the number, so a student is resolved
+      from here, not from Cas-User.
+
+    An earlier version of this assumed CAS could put the number into `Cas-User` itself.
+    It cannot: mod_auth_cas publishes attributes as their own headers and leaves
+    CASAuthNHeader as the username, so a student would never have resolved in production.
+
+    Staff are checked first. An account that is both (an instructor with a student number
+    attached) is staff here, which is the safe way round: it grants them the marking
+    screens they need rather than trapping them in a student view.
     """
-    if not cas_user:
-        return None, None
-    role = db.lookup_role(cas_user)
-    return (cas_user, role) if role else (None, None)
+    if cas_user and db.lookup_role(cas_user) == 'staff':
+        return cas_user, 'staff'
+    if student_number and db.lookup_role(student_number) == 'student':
+        return student_number, 'student'
+    return None, None
 
 
 def page_header():

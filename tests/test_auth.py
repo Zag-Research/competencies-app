@@ -111,11 +111,36 @@ def test_staff_can_view_any_student(db):
 # --- production identity comes from the TMU CAS header --------------------
 
 def test_identity_from_cas_resolves_staff_students_and_unknowns(db):
+    """CAS sends two things and the app needs both.
+
+    Cas-User is the TMU username, which is the whole answer for staff. The student
+    number arrives as a separate attribute header, and it is a different string from
+    the username, so a student resolves from that one.
+    """
     import common
-    assert common.identity_from_cas('dmason') == ('dmason', 'staff')       # admin key
-    assert common.identity_from_cas('500111111') == ('500111111', 'student')
+    # Staff: the CAS username is already the admin key, no attribute needed.
+    assert common.identity_from_cas('dmason') == ('dmason', 'staff')
+    # Student: resolved from the attribute, not from their username.
+    assert common.identity_from_cas('achen', '500111111') == ('500111111', 'student')
     assert common.identity_from_cas('nobody') == (None, None)              # unrecognized
     assert common.identity_from_cas(None) == (None, None)                  # no header
+
+
+def test_a_students_username_alone_does_not_resolve_them(db):
+    """The bug this replaced: assuming CAS could put the number into Cas-User.
+
+    mod_auth_cas keeps Cas-User as the username, so a student arriving with only that
+    must not resolve, or every student would be an unknown user in production and we
+    would find out on the first day of class.
+    """
+    import common
+    assert common.identity_from_cas('achen') == (None, None)
+
+
+def test_an_account_that_is_both_is_treated_as_staff(db):
+    """An instructor who also has a student number gets the marking screens."""
+    import common
+    assert common.identity_from_cas('dmason', '500111111') == ('dmason', 'staff')
 
 
 def test_production_reads_staff_identity_from_cas_header(db, monkeypatch):
@@ -126,6 +151,32 @@ def test_production_reads_staff_identity_from_cas_header(db, monkeypatch):
         '/save/500111111/1/achieved', headers={'Cas-User': 'dmason'})
     assert resp.status_code == 200
     assert achievement_count() == 1
+
+
+def test_production_reads_a_student_from_the_attribute_header(db, monkeypatch):
+    """End to end: a student signs in with their username, and the app knows their
+    number because CAS sent it as its own header."""
+    import app as app_module
+    monkeypatch.setitem(app_module.app.config, 'ENV', 'production')
+    resp = app_module.app.test_client().get(
+        '/view/500111111',
+        headers={'Cas-User': 'achen', 'CAS-studentnumber': '500111111'})
+    assert resp.status_code == 200
+    assert 'Progress' in resp.get_data(as_text=True)
+
+
+def test_the_attribute_header_name_can_be_changed_without_a_deploy(db, monkeypatch):
+    """The prefix is CCS's config, not ours, so it comes from settings."""
+    import app as app_module
+    import db as db_module
+    with db_module.cursor() as sql:
+        sql.execute("insert or replace into settings (key, value) "
+                    "values ('cas_student_number_header', 'X-Number')")
+    monkeypatch.setitem(app_module.app.config, 'ENV', 'production')
+    resp = app_module.app.test_client().get(
+        '/view/500111111',
+        headers={'Cas-User': 'achen', 'X-Number': '500111111'})
+    assert resp.status_code == 200
 
 
 def test_production_without_a_cas_header_is_anonymous(db, monkeypatch):
