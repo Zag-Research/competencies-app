@@ -149,6 +149,28 @@ def apply(connection, rows, today=None, course=None):
     connection.commit()
 
 
+def single_course_students(connection):
+    """Students enrolled in only one course, as (number, name, course).
+
+    Dave's rule for the pilot is that everyone takes both, so this is almost always the
+    sign that only one course's list has been imported. That failure is otherwise
+    silent: those students would simply never see the other course's competencies and
+    could not sign up for them, and the app would look like it was working.
+
+    Not an error, because #11 genuinely supports a part-time student in one course. A
+    warning, so a human decides which it is.
+    """
+    return connection.execute(
+        """select e.student_number, s.first_name || ' ' || s.last_name, e.course
+             from enrollments e
+             join students s on s.student_number = e.student_number
+            where e.withdrawn_on is null
+            group by e.student_number
+           having count(*) = 1
+            order by s.last_name"""
+    ).fetchall()
+
+
 def describe(label, items):
     if not items:
         return
@@ -200,6 +222,16 @@ def main(argv):
             return 0
         apply(connection, rows, course=course)
         print('\ndone')
+        alone = single_course_students(connection)
+        if alone:
+            print('\nWARNING: ' + str(len(alone)) + ' student(s) are in only one course:')
+            for (number, name, in_course) in alone[:10]:
+                print('  ' + number + '  ' + name + '  ' + in_course + ' only')
+            if len(alone) > 10:
+                print('  ... and ' + str(len(alone) - 10) + ' more')
+            print('\nIf everyone takes both courses, the other list has not been'
+                  ' imported yet.')
+            print('Those students cannot sign up for the missing course at all.')
         return 0
     finally:
         connection.close()

@@ -299,3 +299,32 @@ def test_a_per_course_import_still_marks_drops_within_that_course(db, tmp_path):
 
     assert enrollment(db, '500111111', 'CPS109') == ('2026-10-03',)
     assert enrollment(db, '500222222', 'CPS109') == (None,)
+
+
+def test_students_in_only_one_course_are_reported(db, tmp_path):
+    """Importing one list and forgetting the other is otherwise silent.
+
+    Dave's rule is that everyone takes both, so a student with one enrollment almost
+    always means only one course's file has been loaded. Those students would never see
+    the other course's competencies and could not sign up for them, and nothing in the
+    app would say so.
+    """
+    run(db, write_csv(tmp_path, ['500111111,Alice,Chen,CPS109',
+                                 '500111111,Alice,Chen,CPS213',
+                                 '500222222,Ben,Okafor,CPS109']))
+    connection = sqlite3.connect(db)
+    try:
+        alone = import_roster.single_course_students(connection)
+    finally:
+        connection.close()
+    assert [(n, c) for (n, _name, c) in alone] == [('500222222', 'CPS109')]
+
+
+def test_nobody_is_reported_when_everyone_takes_both(db, tmp_path):
+    run(db, write_csv(tmp_path, ['500111111,Alice,Chen,CPS109',
+                                 '500111111,Alice,Chen,CPS213']))
+    connection = sqlite3.connect(db)
+    try:
+        assert import_roster.single_course_students(connection) == []
+    finally:
+        connection.close()
