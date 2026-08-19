@@ -241,3 +241,90 @@ def test_students_cannot_add_students(db):
         'student_number': '500999999', 'first_name': 'New', 'last_name': 'Student',
         'courses': ['CPS109']})
     assert db_module.lookup_role('500999999') is None
+
+
+# --- single-course exports, which is what D2L actually gives you ----------
+
+def test_a_file_with_no_course_column_works_if_the_course_is_given(db, tmp_path):
+    """A D2L export happens from inside one course, so the course is never in the file."""
+    path = tmp_path / 'cps109.csv'
+    path.write_text('student_number,first_name,last_name\n500111111,Alice,Chen\n')
+    rows = import_roster.read_rows(str(path), course='CPS109')
+    assert rows[0]['course'] == 'CPS109'
+
+
+def test_without_a_course_the_column_is_still_required(db, tmp_path):
+    path = tmp_path / 'cps109.csv'
+    path.write_text('student_number,first_name,last_name\n500111111,Alice,Chen\n')
+    with pytest.raises(ValueError) as problem:
+        import_roster.read_rows(str(path))
+    assert 'course' in str(problem.value)
+
+
+def test_importing_one_course_does_not_drop_the_other(db, tmp_path):
+    """The trap in per-course imports.
+
+    Alice takes both. Importing only the CPS109 list must not read her absence from
+    that file as having dropped CPS213, or the first import of the term would wipe
+    every student's second course.
+    """
+    run(db, write_csv(tmp_path, ['500111111,Alice,Chen,CPS109',
+                                 '500111111,Alice,Chen,CPS213']))
+    only109 = tmp_path / 'cps109.csv'
+    only109.write_text('student_number,first_name,last_name\n500111111,Alice,Chen\n')
+
+    connection = sqlite3.connect(db)
+    try:
+        rows = import_roster.read_rows(str(only109), course='CPS109')
+        import_roster.apply(connection, rows, today=date(2026, 10, 3), course='CPS109')
+    finally:
+        connection.close()
+
+    assert enrollment(db, '500111111', 'CPS109') == (None,)
+    assert enrollment(db, '500111111', 'CPS213') == (None,)   # untouched
+
+
+def test_a_per_course_import_still_marks_drops_within_that_course(db, tmp_path):
+    run(db, write_csv(tmp_path, ['500111111,Alice,Chen,CPS109',
+                                 '500222222,Ben,Okafor,CPS109']))
+    only_ben = tmp_path / 'cps109.csv'
+    only_ben.write_text('student_number,first_name,last_name\n500222222,Ben,Okafor\n')
+
+    connection = sqlite3.connect(db)
+    try:
+        rows = import_roster.read_rows(str(only_ben), course='CPS109')
+        import_roster.apply(connection, rows, today=date(2026, 10, 3), course='CPS109')
+    finally:
+        connection.close()
+
+    assert enrollment(db, '500111111', 'CPS109') == ('2026-10-03',)
+    assert enrollment(db, '500222222', 'CPS109') == (None,)
+
+
+def test_students_in_only_one_course_are_reported(db, tmp_path):
+    """Importing one list and forgetting the other is otherwise silent.
+
+    Dave's rule is that everyone takes both, so a student with one enrollment almost
+    always means only one course's file has been loaded. Those students would never see
+    the other course's competencies and could not sign up for them, and nothing in the
+    app would say so.
+    """
+    run(db, write_csv(tmp_path, ['500111111,Alice,Chen,CPS109',
+                                 '500111111,Alice,Chen,CPS213',
+                                 '500222222,Ben,Okafor,CPS109']))
+    connection = sqlite3.connect(db)
+    try:
+        alone = import_roster.single_course_students(connection)
+    finally:
+        connection.close()
+    assert [(n, c) for (n, _name, c) in alone] == [('500222222', 'CPS109')]
+
+
+def test_nobody_is_reported_when_everyone_takes_both(db, tmp_path):
+    run(db, write_csv(tmp_path, ['500111111,Alice,Chen,CPS109',
+                                 '500111111,Alice,Chen,CPS213']))
+    connection = sqlite3.connect(db)
+    try:
+        assert import_roster.single_course_students(connection) == []
+    finally:
+        connection.close()
