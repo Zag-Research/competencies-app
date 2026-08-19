@@ -90,6 +90,8 @@ def cooling_off_label(date_recorded):
 # studio is not running then. TERM_START/TERM_END below bound the term for counting
 # sessions (#50); they are not enforced as a sign-up window.
 STUDIO_WEEKDAYS = (1, 2, 3)
+# Fallback only. The real value is the `studio_lookahead` setting, read by callers, so
+# how far ahead students can book is a config change rather than a deploy (#17).
 STUDIO_LOOKAHEAD = 6
 
 # University reading weeks (TMU 2026-2027 calendar): the studio does not run on these

@@ -36,7 +36,7 @@ def queue_join():
     # Which session this sign-up is for. Guard it against a hand-crafted POST: only
     # a real upcoming studio day is allowed, otherwise fall back to the next one.
     studio_date = request.form.get('studio_date', '')
-    if studio_date not in logic.upcoming_studios():
+    if studio_date not in logic.upcoming_studios(db.studio_lookahead()):
         studio_date = logic.next_studio()
     today = logic.today_toronto().isoformat()
     if competency_ids:
@@ -231,7 +231,7 @@ def queue_claim(student_number):
     # The session whose queue this claim came from, so it only takes requests
     # booked for that day. Guarded against a bad value, defaulting to the soonest.
     day = request.args.get('day')
-    if day not in logic.upcoming_studios():
+    if day not in logic.upcoming_studios(db.studio_lookahead()):
         day = logic.next_studio()
     with db.cursor() as sql:
         won = db.claim_student(sql, student_number, user, day)
@@ -304,7 +304,7 @@ def queue_claim_group(competency_id):
         return redirect(url_for('auth.login'))
     # Batch-claim is scoped to one session, same as the single claim above.
     day = request.args.get('day')
-    if day not in logic.upcoming_studios():
+    if day not in logic.upcoming_studios(db.studio_lookahead()):
         day = logic.next_studio()
     with db.cursor() as sql:
         won, lost = db.claim_competency_group(sql, competency_id, user, day)

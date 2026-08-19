@@ -227,3 +227,21 @@ def test_future_session_is_a_read_only_planning_roster(db, monkeypatch):
     assert 'Chen, Alice' in body          # the booking is visible
     assert 'booked' in body               # shown as booked, not a seat
     assert 'queue_claim' not in body      # but there is no claim action
+
+
+# --- how far ahead students can book is config, not code (#17) ------------
+
+def test_the_booking_window_comes_from_settings(db):
+    """Dave's call about how his course runs, so it must not need a deploy."""
+    with db_module.cursor() as sql:
+        sql.execute("insert or replace into settings (key, value)"
+                    " values ('studio_lookahead', '12')")
+    assert db_module.studio_lookahead() == 12
+    assert len(logic.upcoming_studios(db_module.studio_lookahead())) == 12
+
+
+def test_the_window_falls_back_if_the_setting_is_missing(db):
+    """A missing row must not stop students booking anything at all."""
+    with db_module.cursor() as sql:
+        sql.execute("delete from settings where key = 'studio_lookahead'")
+    assert db_module.studio_lookahead() == logic.STUDIO_LOOKAHEAD
