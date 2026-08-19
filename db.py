@@ -341,12 +341,58 @@ def endorsements_given_today(sql, from_student, day):
 
 
 def enrolled_courses(sql, student_number):
-    # Courses the student is taking. Empty means "not recorded", which callers
+    # Courses the student is currently taking. Empty means "not recorded", which callers
     # treat as enrolled in everything rather than nothing (see competencies_for).
+    # A dropped course is excluded here but its row survives, so their results do too.
     return [row[0] for row in sql.execute(
-        "select course from enrollments where student_number = ? order by course",
+        "select course from enrollments where student_number = ? and withdrawn_on is null"
+        " order by course",
         (student_number,)
     ).fetchall()]
+
+
+def has_enrollment_record(sql, student_number):
+    """True if we know anything about this student's courses, dropped or not.
+
+    The difference between "we never loaded their enrollment" and "they dropped
+    everything". The first should show the full competency list, as a safe default for
+    a roster that is not loaded yet (#11). The second should show nothing, because they
+    are not taking anything.
+    """
+    return sql.execute(
+        "select 1 from enrollments where student_number = ? limit 1", (student_number,)
+    ).fetchone() is not None
+
+
+def add_or_update_student(sql, student_number, first_name, last_name, courses):
+    """Add one student, or correct an existing one, and set which courses they take.
+
+    For a TA with a student in front of them who cannot sign in (#61). Deliberately
+    tolerant: re-adding someone who is already there fixes their name and enrollment
+    rather than erroring, because the person using this does not know which case they
+    are in and should not have to.
+
+    Enrolling in a course they previously dropped clears the withdrawal, which restores
+    them exactly: their achievements were never touched by the drop.
+    """
+    sql.execute(
+        "insert or replace into students (student_number, first_name, last_name)"
+        " values (?, ?, ?)",
+        (student_number, first_name, last_name)
+    )
+    for course in courses:
+        sql.execute(
+            "insert or replace into enrollments (student_number, course, withdrawn_on)"
+            " values (?, ?, null)",
+            (student_number, course)
+        )
+
+
+def all_courses(sql):
+    """Every course that has competencies, for the add-a-student form."""
+    return [row[0] for row in sql.execute(
+        "select distinct course from competencies where course is not null"
+        " order by course").fetchall()]
 
 
 def competencies_for(sql, student_number):
@@ -358,6 +404,11 @@ def competencies_for(sql, student_number):
     """
     courses = enrolled_courses(sql, student_number)
     if not courses:
+        # No current courses. Two very different reasons, so tell them apart: a student
+        # we have no enrollment record for at all gets everything (the roster may not be
+        # loaded yet), a student who dropped everything gets nothing.
+        if has_enrollment_record(sql, student_number):
+            return []
         return sql.execute(
             "select id, name, course from competencies order by id"
         ).fetchall()

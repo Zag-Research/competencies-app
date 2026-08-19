@@ -165,6 +165,11 @@ CREATE TABLE attendance (
 CREATE TABLE enrollments (
     student_number TEXT,
     course TEXT,
+    -- NULL while they are taking it; the date they dropped otherwise (#61). A drop is
+    -- marked rather than deleted, because their results have to survive it and because
+    -- competencies_for reads "no rows at all" as "taking everything", so deleting would
+    -- show a dropped student the full list.
+    withdrawn_on TEXT,
     PRIMARY KEY (student_number, course),
     FOREIGN KEY (student_number) REFERENCES students(student_number)
 );
@@ -179,7 +184,7 @@ INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
 -- file is born with everything, so this must equal the highest number in migrations/,
 -- or migrate.py would try to re-apply a change that is already here. Bump it in the
 -- same commit as any new migration; tests/test_migrations.py fails if it drifts.
-INSERT INTO settings VALUES('schema_version','0');
+INSERT INTO settings VALUES('schema_version','1');
 -- Which header mod_auth_cas publishes the student number in (see DEPLOYMENT.md). It is
 -- named <CASAttributePrefix><name>, and CASAttributePrefix is set in OUR Apache vhost,
 -- not on the CAS server, so we choose it: use CAS- (the Apache 2.4 default), never the
