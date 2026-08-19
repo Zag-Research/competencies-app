@@ -109,3 +109,27 @@ def test_the_progress_page_shows_the_student_against_the_studio(db):
         '/view/500111111').get_data(as_text=True)
     assert 'pace-track' in body
     assert '50%' in body   # one of the student's two competencies is passed
+
+
+# --- a tripwire for the next term (#64) ------------------------------------
+
+def test_the_term_dates_are_the_term_we_are_actually_in():
+    """Fails as soon as TERM_START/TERM_END go stale, which is the whole point.
+
+    Nothing in the app is scoped to a term (#64), so when the studio runs again the
+    hard-coded dates here would silently describe the wrong one: the pace bar would sit
+    at 100% from the first day and nobody would notice, because it looks like a working
+    feature rather than a broken one.
+
+    This turns that into a failing test the moment the dates stop matching reality. It
+    is deliberately annoying. If it fails, either update the dates for the new term, or
+    do #64 properly, but do not skip it.
+    """
+    from datetime import timedelta
+    today = logic.today_toronto()
+    # A month of slack either side, so it does not fail during the break between terms
+    # or while setting up for the next one.
+    assert today <= logic.TERM_END + timedelta(days=31), (
+        'TERM_END is %s, which is in the past. The pace indicator is now describing a '
+        'term that has ended. Update the dates or see #64.' % logic.TERM_END
+    )
