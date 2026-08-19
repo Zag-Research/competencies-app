@@ -52,6 +52,17 @@ def daily_cap():
     return int(get_setting('daily_cap', DEFAULT_DAILY_CAP))
 
 
+# How many upcoming studio sessions a student can book ahead (#17). Six is about two
+# weeks. Longer lets them plan further out; shorter keeps the staff planning view
+# honest, since a booking made a month early is a guess rather than a plan. Dave's call,
+# so it is a setting rather than a number in the code.
+DEFAULT_STUDIO_LOOKAHEAD = 6
+
+
+def studio_lookahead():
+    return int(get_setting('studio_lookahead', DEFAULT_STUDIO_LOOKAHEAD))
+
+
 def lookup_role(username):
     # Interim role lookup: 'staff' if listed in the 'admins' setting, else
     # 'student' if it matches a student_number, else None (unrecognized).

@@ -196,6 +196,10 @@ INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
 -- at 3 (students finish ~week 9), may bump to 4 later. A setting, so changing it
 -- is one row update, not a code change.
 INSERT INTO settings VALUES('daily_cap','3');
+-- how many upcoming studio sessions a student can book ahead (#17). 6 is about two
+-- weeks. Raise it to let them plan further out, at the cost of a staff planning view
+-- full of bookings made before anyone knew what they would be ready for.
+INSERT INTO settings VALUES('studio_lookahead','6');
 -- a claim this old is treated as abandoned, and the student returns to the queue.
 -- Covers the TA who claims a student and then closes their laptop: without this,
 -- that student is invisible to every TA forever.

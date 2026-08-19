@@ -19,7 +19,7 @@ def queue_student_view(student_number):
     if notice:
         p += div(notice).classes('queue-notice')
     today = logic.today_toronto().isoformat()
-    studios = logic.upcoming_studios()
+    studios = logic.upcoming_studios(db.studio_lookahead())
     with db.cursor() as sql:
         states, recorded_at = db.achievement_states(sql, student_number)
         # 'claimed' as well as 'waiting': a TA taking the student must not make their
@@ -197,7 +197,7 @@ def queue_student_view(student_number):
 def queue_staff_view(group_by='student', day=None):
     evaluator = current_user()[0]   # the TA viewing, so we can flag their bumps (#24)
     today = logic.today_toronto().isoformat()
-    studios = logic.upcoming_studios()
+    studios = logic.upcoming_studios(db.studio_lookahead())
     # The session being worked. Defaults to the soonest (today when it runs); a
     # TA can switch to a future one to plan, but only real studio days are valid.
     if day not in studios:
