@@ -48,6 +48,41 @@ def get_setting(key, default=None):
 DEFAULT_DAILY_CAP = 3
 
 
+def completion_by_student(sql):
+    """{student_number: percent of their competencies passed}.
+
+    Used to order the staff queue by who is furthest behind (#69). A percentage rather
+    than a raw count, because a part-time student has 40 competencies and a full-time
+    one has 80; counting raw would park every part-time student at the top of the queue
+    for the whole term.
+    """
+    done = dict(sql.execute(
+        "select student_number, count(*) from achievements where status = 'achieved'"
+        " group by student_number").fetchall())
+    per_course = dict(sql.execute(
+        "select course, count(*) from competencies group by course").fetchall())
+    everything = sql.execute("select count(*) from competencies").fetchone()[0]
+    enrolled = {}
+    for (number, course) in sql.execute(
+            "select student_number, course from enrollments where withdrawn_on is null"):
+        enrolled.setdefault(number, []).append(course)
+    out = {}
+    for (number,) in sql.execute("select student_number from students"):
+        courses = enrolled.get(number)
+        # No enrollment rows means "not recorded", which everywhere else is treated as
+        # taking everything (#11). Keep that consistent here.
+        total = sum(per_course.get(c, 0) for c in courses) if courses else everything
+        out[number] = round(100 * done.get(number, 0) / total) if total else 0
+    return out
+
+
+def attended_days(sql, student_number):
+    """Every studio day this student was present for, as a set of ISO date strings."""
+    return {row[0] for row in sql.execute(
+        "select day from attendance where student_number = ?", (student_number,)
+    ).fetchall()}
+
+
 def daily_cap():
     return int(get_setting('daily_cap', DEFAULT_DAILY_CAP))
 

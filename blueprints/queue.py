@@ -71,7 +71,10 @@ def queue_join():
             for cid in competency_ids:
                 counts[course_of[cid]] = counts.get(course_of[cid], 0) + 1
 
-            cap = db.daily_cap()
+            # A student who missed sessions last week gets those slots back (#70).
+            # The cap spreads work across the term; someone who was ill did not choose
+            # to bunch theirs, so it should not punish them for it.
+            cap = logic.session_cap_for(db.daily_cap(), db.attended_days(sql, user))
             if competency_ids and not logic.session_signup_ok(counts, cap):
                 # Reject the whole sign-up and say why; nothing is inserted.
                 if sum(counts.values()) > cap:

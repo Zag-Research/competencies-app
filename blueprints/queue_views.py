@@ -40,8 +40,10 @@ def queue_student_view(student_number):
         all_competencies = db.competencies_for(sql, student_number)
         # Allowance is per studio session, so a student can plan a week ahead
         # without spending one day's worth of slots.
+        # Their cap can be higher than the base if they missed sessions last week (#70).
+        cap = logic.session_cap_for(db.daily_cap(), db.attended_days(sql, student_number))
         remaining = {
-            day: db.daily_cap() - db.requests_used_for_studio(sql, student_number, day)
+            day: cap - db.requests_used_for_studio(sql, student_number, day)
             for day in studios
         }
         present_today = db.is_present(sql, student_number, today)
@@ -147,13 +149,19 @@ def queue_student_view(student_number):
         # The balance rule only applies to a student in more than one course, so the
         # "keep your two courses within 1" line is shown only to them; a single-course
         # student would otherwise read a rule about a course they are not taking (#11).
-        hint = 'Up to ' + str(db.daily_cap()) + ' competencies per studio session'
+        hint = 'Up to ' + str(cap) + ' competencies per studio session'
         if len({course for (_cid, _name, course) in all_competencies}) > 1:
             hint += (', and keep your two courses within 1 of each other '
                      '(for example 2 of one and 1 of the other)')
         hint += ('. Pick the session you want to be evaluated in: you can book '
                  'ahead, not just for today.')
         p += div(hint).classes('queue-allowance')
+        # Say why the number is higher than usual, or a student who missed a week
+        # sees an unexplained 12 and assumes it is a bug (#70).
+        if cap > db.daily_cap():
+            p += div('That is more than usual because you missed sessions last week. '
+                     'The extra slots are for catching up, and they only last this '
+                     'week.').classes('queue-allowance')
         f = form(method='post', action=url_for('queue.queue_join'))
         # Which session these competencies are for. Only sessions with room left
         # are offered, so a student cannot book into a full day and be silently
@@ -260,6 +268,15 @@ def queue_staff_view(group_by='student', day=None):
                     order by r.requested_at""",
                 (day, db.claim_cutoff())
             ).fetchall()
+        # Furthest behind first (#69). The queue used to be first-come-first-served,
+        # which is a fairness rule of its own; Dave's is a different one: when a session
+        # runs out of time, the people who miss out should be the ones who can most
+        # afford to. Python's sort is stable, so students on the same completion keep
+        # the requested_at order the query already gave us, and first-come-first-served
+        # still decides between equals.
+        if not planning:
+            behind = db.completion_by_student(sql)
+            rows.sort(key=lambda row: behind.get(row[0], 0))
         # Students booked today with no seat yet. Invisible on the queue above by
         # design (a claim means walking over to someone, and there is nowhere to walk
         # to), but staff still need to see who has not turned up, and to set a seat on
