@@ -530,3 +530,27 @@ ul.competency-scope li {
     padding: 0.45rem 0.6rem;
     font-size: 1rem;
 }
+
+/* Add a student, on the roster page (#61). A TA uses this with someone standing in
+   front of them who cannot sign in, so it is one row that wraps rather than a form
+   they have to scroll. */
+.add-student-wrap {
+    padding-bottom: 1rem;
+    margin-bottom: 0.6rem;
+    border-bottom: 1px solid #ececec;
+}
+.add-student {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+.add-student input[type="text"] {
+    width: 150px;
+    padding: 0.4rem 0.6rem;
+    font-size: 1rem;
+}
+.add-student .queue-check {
+    border-bottom: none;
+    padding: 0;
+}

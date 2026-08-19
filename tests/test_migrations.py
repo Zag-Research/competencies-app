@@ -26,6 +26,11 @@ def live_db(tmp_path, monkeypatch):
     connection.execute(
         "insert into achievements (student_number, competency_id, status, date_recorded) "
         "values ('500111111', 1, 'achieved', '2026-09-15 10:00')")
+    # Stamp it back to 0. These tests supply their own throwaway migrations numbered from
+    # 001, so how many real ones exist is irrelevant to them, and hard-coding around the
+    # real count would make them fail every time one is added.
+    connection.execute(
+        "update settings set value = '0' where key = 'schema_version'")
     connection.commit()
     connection.close()
     return str(path)

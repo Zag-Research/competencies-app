@@ -24,9 +24,9 @@ def db(tmp_path, monkeypatch):
         sql.execute("insert into students values ('Dana', 'Ng', '500444444')")
         sql.execute("insert into competencies (id, name, course) values (1, 'Nested loops', 'CPS109')")
         sql.execute("insert into competencies (id, name, course) values (2, 'Latches', 'CPS213')")
-        sql.execute("insert into enrollments values ('500111111', 'CPS109')")
-        sql.execute("insert into enrollments values ('500111111', 'CPS213')")
-        sql.execute("insert into enrollments values ('500333333', 'CPS109')")
+        sql.execute("insert into enrollments (student_number, course) values ('500111111', 'CPS109')")
+        sql.execute("insert into enrollments (student_number, course) values ('500111111', 'CPS213')")
+        sql.execute("insert into enrollments (student_number, course) values ('500333333', 'CPS109')")
     return db_module
 
 

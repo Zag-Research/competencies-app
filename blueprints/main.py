@@ -18,8 +18,23 @@ def index():
     p = page()
     p += page_header()
     p += h1('Students')
-    # (Queue / Attendance / Shout-outs live in the header nav now, no second row here.)
+    notice = session.pop('roster_notice', None)
+    if notice:
+        p += div(notice).classes('queue-notice')
     with db.cursor() as sql:
+        # Add a student who is not on the roster yet (#61). Sits at the top because the
+        # moment it is needed is the moment someone cannot sign in and is standing there.
+        f = form(method='post', action=url_for('main.add_student')).classes('add-student')
+        f += input(type='text', name='student_number', placeholder='Student number')
+        f += input(type='text', name='first_name', placeholder='First name')
+        f += input(type='text', name='last_name', placeholder='Last name')
+        for course in db.all_courses(sql):
+            lbl = label().classes('queue-check')
+            lbl += input(type='checkbox', name='courses', value=course)
+            lbl += span(course)
+            f += lbl
+        f += button('Add student', type='submit').classes('roster-link')
+        p += div(f).classes('add-student-wrap')
         for (number, first, last) in sql.execute(
                 "select student_number, first_name, last_name from students order by last_name").fetchall():
             # one roster row per student: name plus a Mark and a View link
@@ -29,6 +44,36 @@ def index():
                 a('View', href=url_for('main.view_student', student_number=number)).classes('roster-link'),
             ).classes('roster-row')
     return str(p)
+
+
+@main_bp.route('/students/add', methods=['POST'])
+def add_student():
+    """A TA adds a student who is not in the roster yet (#61).
+
+    Students can add the course until the middle of September, so someone can turn up
+    who was not on the class list when it was loaded. Without this they are stuck: the
+    app does not recognise them, so they cannot sign up or be evaluated, and fixing it
+    would need whoever has server access to run the importer.
+
+    No delete counterpart, deliberately. A student who drops is marked by the importer,
+    not removed, and a delete button beside student records is a bad idea in a room
+    where people are working quickly.
+    """
+    user, role = current_user()
+    if user is None or role != 'staff':
+        return redirect(url_for('auth.login'))
+    number = request.form.get('student_number', '').strip()
+    first = request.form.get('first_name', '').strip()
+    last = request.form.get('last_name', '').strip()
+    courses = request.form.getlist('courses')
+    if not (number and first and last and courses):
+        session['roster_notice'] = ('Needs a student number, both names, and at least '
+                                    'one course.')
+        return redirect(url_for('main.index'))
+    with db.cursor() as sql:
+        db.add_or_update_student(sql, number, first, last, courses)
+    session['roster_notice'] = first + ' ' + last + ' can sign in now.'
+    return redirect(url_for('main.index'))
 
 
 @main_bp.route('/view/<student_number>')

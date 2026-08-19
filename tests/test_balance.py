@@ -66,8 +66,8 @@ def db(tmp_path, monkeypatch):
         for i in (4, 5, 6):
             sql.execute("insert into competencies (id, name, course)"
                         " values (?, ?, 'CPS213')", (i, 'logic' + str(i)))
-        sql.execute("insert into enrollments values ('500111111', 'CPS109')")
-        sql.execute("insert into enrollments values ('500111111', 'CPS213')")
+        sql.execute("insert into enrollments (student_number, course) values ('500111111', 'CPS109')")
+        sql.execute("insert into enrollments (student_number, course) values ('500111111', 'CPS213')")
     return db_module
 
 
@@ -144,7 +144,7 @@ def test_single_course_student_hint_omits_the_balance_line(db, monkeypatch):
     # A part-time student in one course should not read a rule about a second course.
     with db_module.cursor() as sql:
         sql.execute("insert into students values ('Sam', 'Lee', '500888888')")
-        sql.execute("insert into enrollments values ('500888888', 'CPS109')")
+        sql.execute("insert into enrollments (student_number, course) values ('500888888', 'CPS109')")
     body = other_student_client(monkeypatch, '500888888').get('/queue').get_data(as_text=True)
     assert 'Sign up' in body                    # the sign-up block did render
     assert 'keep your two courses' not in body  # but without the balance wording
