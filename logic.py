@@ -267,6 +267,45 @@ def is_lab_host(hostname, pattern=None):
 # 0 for a course the student takes but has not picked, or a lopsided "2 and 0"
 # would look balanced. A student in a single course has one entry, so max == min
 # and only the cap applies.
+# Catching up after a missed week (#70). The three-per-session cap (#22) is a
+# spreading rule, not a rationing one: it stops a student doing forty in one sitting.
+# Someone who was ill did not choose to bunch their work, so the cap punishes them for
+# something it was never aimed at.
+#
+# Dave: "an ACR can cover three days... those three that they would have missed, three,
+# so nine evaluations they would have missed, will kind of move forward to the following
+# week, so the following week they can do more than three."
+#
+# One week, so the most anyone can carry is three sessions' worth. Missing four weeks
+# does not entitle anyone to a thirty-nine competency session.
+ROLLOVER_SESSIONS = 3
+
+
+def sessions_missed_recently(attended_days, today=None, window=ROLLOVER_SESSIONS):
+    """How many of the last `window` finished studio sessions the student missed.
+
+    A rolling window, not a bank. Credit expires after a week, because Dave's framing is
+    catching up *the following week*, and an unbounded balance would let someone save up
+    all term and undo the spreading rule entirely.
+
+    `attended_days` is the set of ISO dates they were present. Today's session does not
+    count as missed until it is over.
+    """
+    today = today or today_toronto()
+    finished = [day for day in studio_days() if day < today]
+    return sum(1 for day in finished[-window:] if day.isoformat() not in attended_days)
+
+
+def session_cap(base_cap, missed):
+    """Their cap for this session, raised by the sessions they missed last week."""
+    return base_cap + base_cap * min(missed, ROLLOVER_SESSIONS)
+
+
+def session_cap_for(base_cap, attended_days, today=None):
+    """The cap this student gets this session, given the days they were present."""
+    return session_cap(base_cap, sessions_missed_recently(attended_days, today))
+
+
 def session_signup_ok(course_counts, cap):
     counts = list(course_counts.values())
     if sum(counts) > cap:

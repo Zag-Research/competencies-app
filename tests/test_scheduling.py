@@ -245,3 +245,42 @@ def test_the_window_falls_back_if_the_setting_is_missing(db):
     with db_module.cursor() as sql:
         sql.execute("delete from settings where key = 'studio_lookahead'")
     assert db_module.studio_lookahead() == logic.STUDIO_LOOKAHEAD
+
+# --- catching up after a missed week (#70) --------------------------------
+
+def test_a_student_who_attended_everything_has_the_normal_cap():
+    from datetime import date
+    days = ['2026-09-08', '2026-09-09', '2026-09-10']
+    assert logic.session_cap_for(3, set(days), today=date(2026, 9, 15)) == 3
+
+
+def test_missing_a_whole_week_gives_the_slots_back():
+    """Dave's example: three missed sessions, so nine missed evaluations, so twelve."""
+    from datetime import date
+    assert logic.session_cap_for(3, set(), today=date(2026, 9, 15)) == 12
+
+
+def test_missing_four_weeks_still_only_gives_one_week_back():
+    """Otherwise a student could skip a month and then do thirty-nine in one sitting,
+    which would undo the spreading rule the cap exists for."""
+    from datetime import date
+    assert logic.session_cap_for(3, set(), today=date(2026, 10, 20)) == 12
+
+
+def test_credit_expires_rather_than_banking():
+    """Missed the first week, then attended the second. The credit is gone."""
+    from datetime import date
+    attended = {'2026-09-15', '2026-09-16', '2026-09-17'}
+    assert logic.session_cap_for(3, attended, today=date(2026, 9, 22)) == 3
+
+
+def test_todays_session_is_not_missed_until_it_is_over():
+    from datetime import date
+    # Sitting in the first session of term, having missed nothing before it.
+    assert logic.session_cap_for(3, set(), today=date(2026, 9, 8)) == 3
+
+
+def test_the_balance_rule_still_applies_at_the_higher_cap():
+    """Catching up must not mean bingeing one course."""
+    assert logic.session_signup_ok({'CPS109': 12, 'CPS213': 0}, 12) is False
+    assert logic.session_signup_ok({'CPS109': 6, 'CPS213': 6}, 12) is True
