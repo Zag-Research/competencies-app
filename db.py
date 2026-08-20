@@ -48,6 +48,41 @@ def get_setting(key, default=None):
 DEFAULT_DAILY_CAP = 3
 
 
+def progress_by_student(sql):
+    """Per student, how they are doing in each course they take.
+
+    Returns rows of (last, first, number, [(course, achieved, total), ...]).
+
+    Per course rather than one overall figure, because the courses are graded
+    separately: 40 competencies at 2% each in CPS109, and the same again in CPS213.
+    A single blended percentage would be the wrong number to type into either.
+    """
+    per_course = dict(sql.execute(
+        "select course, count(*) from competencies where course is not null"
+        " group by course").fetchall())
+    achieved = {}
+    for (number, course, n) in sql.execute(
+            """select a.student_number, c.course, count(*)
+                 from achievements a
+                 join competencies c on c.id = a.competency_id
+                where a.status = 'achieved'
+                group by a.student_number, c.course"""):
+        achieved[(number, course)] = n
+    enrolled = {}
+    for (number, course) in sql.execute(
+            "select student_number, course from enrollments where withdrawn_on is null"):
+        enrolled.setdefault(number, []).append(course)
+    rows = []
+    for (number, first, last) in sql.execute(
+            "select student_number, first_name, last_name from students"):
+        # No enrollment rows means "not recorded", treated as taking everything (#11).
+        courses = sorted(enrolled.get(number) or per_course.keys())
+        rows.append((last, first, number,
+                     [(course, achieved.get((number, course), 0), per_course.get(course, 0))
+                      for course in courses]))
+    return rows
+
+
 def completion_by_student(sql):
     """{student_number: percent of their competencies passed}.
 

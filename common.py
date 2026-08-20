@@ -118,6 +118,7 @@ def page_header():
         nav = div().classes('staff-nav')
         nav += a('Queue', href=url_for('queue.queue')).classes('staff-nav-link')
         nav += a('Students', href=url_for('main.index')).classes('staff-nav-link')
+        nav += a('Progress', href=url_for('reports.progress')).classes('staff-nav-link')
         nav += a('Attendance', href=url_for('main.attendance')).classes('staff-nav-link')
         nav += a('Evaluators', href=url_for('main.evaluators')).classes('staff-nav-link')
         nav += a('Shout-outs', href=url_for('main.endorsements')).classes('staff-nav-link')

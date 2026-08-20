@@ -15,6 +15,7 @@ from blueprints.auth import auth_bp
 from blueprints.main import main_bp
 from blueprints.mark import mark_bp
 from blueprints.queue import queue_bp
+from blueprints.reports import reports_bp
 
 
 def create_app():
@@ -30,6 +31,7 @@ def create_app():
     app.register_blueprint(main_bp)
     app.register_blueprint(mark_bp)
     app.register_blueprint(queue_bp)
+    app.register_blueprint(reports_bp)
     return app
 
 
