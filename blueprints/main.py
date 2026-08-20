@@ -264,9 +264,7 @@ def links():
     p = page()
     p += page_header()
     p += h1('Worth reading')
-    p += div('Short pieces students see on their progress page. The newest three show '
-             'without scrolling, so put the one you most want read at the top by '
-             'adding it last.').classes('subnav')
+    p += div('Shown on every student progress page, newest first.').classes('subnav')
     if notice:
         p += div(notice).classes('queue-notice')
     with db.cursor() as sql:
@@ -371,10 +369,7 @@ def evaluators():
     p = page()
     p += page_header()
     p += h1('Evaluations by evaluator')
-    p += div('Every evaluation counts the same here, passed or not, because both '
-             'take the same time at the desk. A retry counts for both TAs: the one '
-             'who said "not yet" did the work as much as the one who passed them. '
-             'The recent column is the last seven days.').classes('subnav')
+    p += div('Passed and not passed count the same.').classes('subnav')
     with db.cursor() as sql:
         total = db.evaluator_counts(sql)
         recent = db.evaluator_counts(sql, since=logic.days_ago(7))
@@ -403,9 +398,7 @@ def attendance():
     p = page()
     p += page_header()
     p += h1('Attendance')
-    p += div('Sessions attended per student. The attended-vs-total percentage '
-             'arrives with the term calendar at deployment; for now this is the '
-             'raw count.').classes('subnav')
+
     with db.cursor() as sql:
         counts = db.attendance_counts(sql)
         roster = db.attendance_for_day(sql, day)
@@ -413,12 +406,23 @@ def attendance():
     if not counts:
         p += div('No check-ins yet.').classes('queue-empty')
     else:
+        # Out of the sessions that have actually happened, not the term's 36, or
+        # everyone looks absent in September (#50 gave us the term calendar).
+        elapsed, _total = logic.term_elapsed()
         for (fn, ln, n) in counts:
-            p += div(
-                span(ln + ', ' + fn).classes('progress-name'),
-                span(str(n) + (' session' if n == 1 else ' sessions')
-                     ).classes('progress-badge'),
-            ).classes('progress-row')
+            row = div(span(ln + ', ' + fn).classes('progress-name')).classes('progress-row')
+            # "2 of 0" before term starts is worse than saying nothing, so out of term
+            # this is just the raw count.
+            if elapsed:
+                row += span(str(n) + ' of ' + str(elapsed)).classes('progress-badge')
+                # The rule is a penalty below half, so flag that and nothing else.
+                if n * 2 < elapsed:
+                    row += span('under half').classes(
+                        'progress-badge').addClasses('state-cooling_off')
+            else:
+                row += span(str(n) + (' session' if n == 1 else ' sessions')
+                            ).classes('progress-badge')
+            p += row
     # Who was present on one specific session.
     heading = logic.studio_label(day)
     if day == logic.today_toronto().isoformat():
@@ -441,10 +445,6 @@ def endorsements():
     p = page()
     p += page_header()
     p += h1('Peer shout-outs')
-    p += div('Sorted by how many different classmates thanked them, not by the total. '
-             'Thirty thank-yous from two people and thirty from twenty-five people are '
-             'very different things, and only the classmate count tells them apart.'
-             ).classes('subnav')
     with db.cursor() as sql:
         tallies = db.endorsement_tallies(sql)
     if not tallies:
