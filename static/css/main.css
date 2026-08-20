@@ -428,42 +428,38 @@ ul.competency-scope li {
     margin: 0.6rem 0;
 }
 
-/* Pace (#50): the student's completion against the studio's, as two bars. The ask
-   was a carrot, so the student's own bar carries the colour and the studio sits
-   behind it in grey as a neutral reference, whichever way the comparison falls. */
+/* Pace (#50): one bar for the student, with a marker showing where the studio has
+   got to. The studio figure is a reference line rather than a second thing to track,
+   so it gets a tick rather than a bar of its own. */
 .pace {
     margin: 0 0 1.6rem;
-    padding: 1rem 1.1rem;
-    border: 1px solid #ececec;
-    border-radius: 10px;
 }
 .pace-row {
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    margin-bottom: 0.6rem;
-}
-.pace-label {
-    flex: 0 0 7.5rem;
-    font-size: 0.95rem;
-    color: #5f6571;
 }
 .pace-track {
+    position: relative;
     flex: 1;
-    height: 0.55rem;
+    height: 0.7rem;
     background: #eceef1;
     border-radius: 999px;
-    overflow: hidden;
 }
 .pace-fill {
     height: 100%;
     border-radius: 999px;
-}
-.pace-fill.is-you {
     background: #1e6b30;
 }
-.pace-fill.is-term {
-    background: #9aa1ad;
+/* The studio's position. translateX centres it on the percentage rather than
+   starting at it, so at 50% the tick sits on the midpoint and not just past it. */
+.pace-marker {
+    position: absolute;
+    top: -0.25rem;
+    bottom: -0.25rem;
+    width: 2px;
+    transform: translateX(-1px);
+    background: #5f6571;
 }
 .pace-value {
     flex: 0 0 3rem;
