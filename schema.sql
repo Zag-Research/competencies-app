@@ -109,8 +109,8 @@ CREATE TABLE links (
     added_at TEXT
 );
 
--- link_clicks: which students have opened which link. Dave: "Yes, track
--- click-throughs, probably per student so we can encourage students to stay engaged."
+-- link_clicks: which students have opened which link. Dave asked for click-throughs
+-- tracked per student, so students who are drifting can be encouraged.
 --
 -- (student, link) primary key, so this records WHETHER a student opened something, not
 -- how many times. Encouraging a student who has read nothing is the use; a click count
