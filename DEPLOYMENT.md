@@ -143,6 +143,23 @@ halfway. See `migrations/README.md` to add one.
 
 Deploy between studio sessions. A reload mid-marking loses a TA's in-progress work.
 
+**Settings, changed without a deploy.** These are rows, not code. Edit one and it is
+live on the next page load: no restart, no `git pull`, no reload. Handy mid-term.
+
+| Setting | Now | What it does |
+| --- | --- | --- |
+| `daily_cap` | 3 | Competencies a student may book per session. Dave's plan is to raise this to 4 once the pace is clear. |
+| `studio_lookahead` | 6 | How many future sessions they can book into. About two weeks. |
+| `claim_timeout_minutes` | 20 | When an abandoned claim returns to the queue. |
+| `lab_host_pattern` | `eng\d{3}-\d+` | Which machines count as the studio lab, for seat entry. Widen it to relax the gate in an emergency. |
+
+```
+sqlite3 course-data.db "update settings set value = '4' where key = 'daily_cap'"
+```
+
+A student already carrying missed sessions gets more than the cap on purpose, so the
+number they see is not always this one.
+
 **Rolling back a bad deploy.** Code only, and it is as fast as deploying:
 ```
 git log --oneline -5
