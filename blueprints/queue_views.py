@@ -64,8 +64,7 @@ def queue_student_view(student_number):
     if logic.is_studio_day(today):
         if not request_is_in_lab():
             p += div('Seat numbers can only be entered from a lab machine in the '
-                     'studio, so a TA knows you are really there. Everything else on '
-                     'this page works from anywhere.').classes('queue-notice')
+                     'studio.').classes('queue-notice')
         else:
             # Students sign up before they get to the lab, so a request starts with no
             # seat. Until they enter one, staff cannot see them: there is nowhere to
@@ -77,9 +76,8 @@ def queue_student_view(student_number):
                     span('You are at seat ' + seat + '. A TA will come to you.'),
                 ).classes('queue-seat-set')
             elif has_today:
-                p += div('You are signed up for today. Enter your seat number so a TA '
-                         'can find you. You will not appear in the staff queue until '
-                         'you do.').classes('queue-notice')
+                p += div('Enter your seat number so a TA can find you. Staff cannot '
+                         'see you until you do.').classes('queue-notice')
             elif present_today:
                 p += div('You are marked present for today. See you next session.'
                          ).classes('queue-seat-set')
@@ -159,9 +157,8 @@ def queue_student_view(student_number):
         # Say why the number is higher than usual, or a student who missed a week
         # sees an unexplained 12 and assumes it is a bug (#70).
         if cap > db.daily_cap():
-            p += div('That is more than usual because you missed sessions last week. '
-                     'The extra slots are for catching up, and they only last this '
-                     'week.').classes('queue-allowance')
+            p += div('Higher than usual: you missed sessions last week, and these '
+                     'extra slots only last this week.').classes('queue-allowance')
         f = form(method='post', action=url_for('queue.queue_join'))
         # Which session these competencies are for. Only sessions with room left
         # are offered, so a student cannot book into a full day and be silently
@@ -294,9 +291,7 @@ def queue_staff_view(group_by='student', day=None):
         p += queue_by_student(rows, day, claimable=not planning, evaluator=evaluator)
     if awaiting:
         p += h2('Signed up, no seat yet')
-        p += div('These students booked this session but are not showing as seated, so '
-                 'nobody can claim them. If one of them is in front of you, put their '
-                 'seat in here.').classes('subnav')
+        p += div('Nobody can claim them until they have a seat.').classes('subnav')
         for (number, first, last, how_many) in awaiting:
             f = form(method='post',
                      action=url_for('queue.queue_seat_for', student_number=number))
