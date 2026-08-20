@@ -117,7 +117,7 @@ def view_student(student_number=None):
         if selected not in courses_here:
             selected = None
         if len(courses_here) > 1:
-            filt = div(span('Show ')).classes('subnav')
+            filt = div().classes('subnav')
             alllink = a('All', href=url_for('main.view_student',
                                             student_number=student_number)).classes('queue-toggle')
             if selected is None:
