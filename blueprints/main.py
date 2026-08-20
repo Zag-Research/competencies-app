@@ -140,16 +140,22 @@ def view_student(student_number=None):
         elapsed, sessions = logic.term_elapsed()
         done_pct = logic.percent(achieved, len(shown))
         term_pct = logic.percent(elapsed, sessions)
+        # One bar, with a marker where the studio has got to. The studio figure is a
+        # reference rather than a second thing to track, so it does not need a bar of
+        # its own: the point is only to make the student's own number mean something,
+        # since 30% says nothing until you know whether the term is 20% or 60% through.
+        fill = div().classes('pace-fill')
+        fill.addAttributes(style='width: ' + str(done_pct) + '%')
+        track = div(fill).classes('pace-track')
+        if elapsed:
+            marker = div().classes('pace-marker')
+            marker.addAttributes(style='left: ' + str(term_pct) + '%')
+            track += marker
         pace = div().classes('pace')
-        for label, pct, tone in (('Competencies', done_pct, 'is-you'),
-                                 ('Studio', term_pct, 'is-term')):
-            fill = div().classes('pace-fill').addClasses(tone)
-            fill.addAttributes(style='width: ' + str(pct) + '%')
-            pace += div(
-                span(label).classes('pace-label'),
-                div(fill).classes('pace-track'),
-                span(str(pct) + '%').classes('pace-value'),
-            ).classes('pace-row')
+        pace += div(
+            track,
+            span(str(done_pct) + '%').classes('pace-value'),
+        ).classes('pace-row')
         pace += div(logic.pace_note(done_pct, term_pct, elapsed)).classes('pace-note')
         p += pace
         # Worth reading (#51). Sits directly under the pace bars, on purpose: the note
