@@ -46,11 +46,9 @@ def progress():
     p += nav
     with db.cursor() as sql:
         rows = db.progress_by_student(sql)
-        attended = dict(sql.execute(
-            "select student_number, count(*) from attendance group by student_number"))
-        thanked = dict(sql.execute(
-            "select to_student, count(distinct from_student) from endorsements"
-            " group by to_student"))
+        attended = {number: n for (number, _f, _l, n) in db.attendance_counts(sql)}
+        thanked = {number: people
+                   for (number, _f, _l, _n, people) in db.endorsement_tallies(sql)}
         elapsed, _total = logic.term_elapsed()
     if not rows:
         p += div('No students loaded yet.').classes('queue-empty')

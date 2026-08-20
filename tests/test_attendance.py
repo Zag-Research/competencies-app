@@ -64,18 +64,9 @@ def test_counts_rank_by_sessions_attended(db):
         db.mark_present(sql, '500111111', TUE)
         db.mark_present(sql, '500111111', WED)
         db.mark_present(sql, '500222222', TUE)
-        counts = db.attendance_counts(sql)
+        counts = [(fn, ln, n) for (_number, fn, ln, n) in db.attendance_counts(sql)]
     assert counts == [('Alice', 'Chen', 2), ('Ben', 'Okafor', 1)]
 
-
-def test_day_roster_lists_who_was_present(db):
-    with db.cursor() as sql:
-        db.mark_present(sql, '500222222', TUE)
-        roster = db.attendance_for_day(sql, TUE)
-    assert roster == [('Ben', 'Okafor')]  # (first_name, last_name)
-
-
-# --- through the routes --------------------------------------------------
 
 def signed_in_as(username, role):
     import app as app_module
@@ -131,12 +122,10 @@ def test_a_student_cannot_be_marked_present_by_someone_else(db, monkeypatch):
     assert count_for('500222222') == 0
 
 
-def test_attendance_page_is_staff_only(db, monkeypatch):
-    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 28))
-    with db.cursor() as sql:
-        db.mark_present(sql, '500111111', TUE)
-    staff = signed_in_as('dmason', 'staff')
-    body = staff.get('/attendance').get_data(as_text=True)
-    assert 'Chen, Alice' in body
-    student = signed_in_as('500111111', 'student')
-    assert student.get('/attendance').status_code == 302
+def test_the_attendance_page_is_gone(db):
+    """Its numbers are columns on the progress page now, so the tab went (#77).
+
+    A tripwire, not a feature: if someone re-adds a standalone attendance page, the
+    duplication this removed is back and the staff nav grows a seventh tab again.
+    """
+    assert signed_in_as('dmason', 'staff').get('/attendance').status_code == 404

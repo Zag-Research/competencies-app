@@ -712,23 +712,15 @@ def is_present(sql, student_number, day):
     ).fetchone() is not None
 
 
-def attendance_for_day(sql, day):
-    # Everyone who checked in for one session, for the staff roster of a session.
-    return sql.execute(
-        """select s.first_name, s.last_name from attendance a
-             join students s on a.student_number = s.student_number
-            where a.day = ?
-            order by s.last_name, s.first_name""",
-        (day,)
-    ).fetchall()
-
-
 def attendance_counts(sql):
-    # Sessions attended per student, most first: the raw signal the instructor
-    # folds into the miss-more-than-half rule. The "X of Y" percentage waits on a
-    # real term calendar (there is no session count without term start/end dates).
+    """(student_number, first, last, sessions attended), most attended first.
+
+    The raw signal behind the instructor's miss-more-than-half rule. Keyed on the
+    student number so the progress page can look them up (#75).
+    """
     return sql.execute(
-        """select s.first_name, s.last_name, count(*) as n from attendance a
+        """select a.student_number, s.first_name, s.last_name, count(*) as n
+             from attendance a
              join students s on a.student_number = s.student_number
             group by a.student_number
             order by n desc, s.last_name, s.first_name"""
@@ -736,7 +728,7 @@ def attendance_counts(sql):
 
 
 def endorsement_tallies(sql):
-    """Per student: (first, last, thank_yous, how_many_different_classmates).
+    """Per student: (number, first, last, thank_yous, how_many_different_classmates).
 
     Both numbers, because the total alone cannot tell being helpful apart from having
     a friend. The schema already stops the crudest gaming, one thank-you per classmate
@@ -749,7 +741,7 @@ def endorsement_tallies(sql):
     visible so the judgement is an informed one.
     """
     return sql.execute(
-        """select s.first_name, s.last_name, count(*) as n,
+        """select e.to_student, s.first_name, s.last_name, count(*) as n,
                   count(distinct e.from_student) as people
              from endorsements e
              join students s on e.to_student = s.student_number

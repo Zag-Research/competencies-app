@@ -89,7 +89,8 @@ def test_tally_reports_both_the_total_and_how_many_people(db):
         db.add_endorsement(sql, '500222222', '500333333', DAY)
         tallies = db.endorsement_tallies(sql)
     # Ben: 2 thank-yous from 2 people. Chloe: 1 from 1. Alice, thanked by nobody, absent.
-    assert tallies == [('Ben', 'Okafor', 2, 2), ('Chloe', 'Diaz', 1, 1)]
+    assert [(fn, ln, n, people) for (_num, fn, ln, n, people) in tallies] == [
+        ('Ben', 'Okafor', 2, 2), ('Chloe', 'Diaz', 1, 1)]
 
 
 def test_a_reciprocal_pair_is_distinguishable_from_being_helpful(db):
@@ -109,11 +110,11 @@ def test_a_reciprocal_pair_is_distinguishable_from_being_helpful(db):
         for giver in ('500111111', '500222222', '500333333'):
             db.add_endorsement(sql, giver, '500444444', days[0])
         tallies = db.endorsement_tallies(sql)
-    by_name = {last: (n, people) for (_f, last, n, people) in tallies}
+    by_name = {last: (n, people) for (_num, _f, last, n, people) in tallies}
     assert by_name['Okafor'] == (3, 1)      # three thank-yous, one person
     assert by_name['Ng'] == (3, 3)          # three thank-yous, three people
     # Breadth decides the order, so Dana is above the reciprocal pair.
-    assert tallies[0][1] == 'Ng' 
+    assert tallies[0][2] == 'Ng' 
 
 
 # --- routes --------------------------------------------------------------
@@ -153,17 +154,6 @@ def test_staff_cannot_endorse(db):
     client = signed_in_as('dmason', 'staff')
     client.post('/endorse', data={'to_student': '500222222'})
     assert received_count('500222222') == 0
-
-
-def test_tally_page_is_staff_only(db):
-    with db.cursor() as sql:
-        db.add_endorsement(sql, '500111111', '500222222', DAY)
-    staff = signed_in_as('dmason', 'staff')
-    body = staff.get('/endorsements').get_data(as_text=True)
-    assert 'Okafor, Ben' in body
-    # A student is redirected away rather than shown the tally.
-    student = signed_in_as('500111111', 'student')
-    assert student.get('/endorsements').status_code == 302
 
 
 def test_endorse_stamps_the_toronto_day_not_utc(db, monkeypatch):
