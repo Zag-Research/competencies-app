@@ -272,9 +272,9 @@ def is_lab_host(hostname, pattern=None):
 # Someone who was ill did not choose to bunch their work, so the cap punishes them for
 # something it was never aimed at.
 #
-# Dave: "an ACR can cover three days... those three that they would have missed, three,
-# so nine evaluations they would have missed, will kind of move forward to the following
-# week, so the following week they can do more than three."
+# Dave set the size of this: an ACR can cover three days, so a student can lose a whole
+# week of sessions. Those three sessions' worth, nine evaluations, move forward, and the
+# following week they may do more than three.
 #
 # One week, so the most anyone can carry is three sessions' worth. Missing four weeks
 # does not entitle anyone to a thirty-nine competency session.

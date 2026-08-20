@@ -622,8 +622,8 @@ def link_engagement(sql):
 def students_with_no_clicks(sql):
     """Students who have opened nothing, as (first, last, number), by surname.
 
-    The point of tracking clicks at all, per Dave: "so we can encourage students to
-    stay engaged." This is the list that makes that possible.
+    Encouraging the students who are drifting is the whole reason Dave wanted clicks
+    tracked per student. This is the list that makes that possible.
     """
     return sql.execute(
         """select first_name, last_name, student_number from students
