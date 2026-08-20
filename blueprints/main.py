@@ -441,14 +441,21 @@ def endorsements():
     p = page()
     p += page_header()
     p += h1('Peer shout-outs')
+    p += div('Sorted by how many different classmates thanked them, not by the total. '
+             'Thirty thank-yous from two people and thirty from twenty-five people are '
+             'very different things, and only the classmate count tells them apart.'
+             ).classes('subnav')
     with db.cursor() as sql:
         tallies = db.endorsement_tallies(sql)
     if not tallies:
         p += div('No shout-outs yet.').classes('queue-empty')
         return str(p)
-    for (fn, ln, n) in tallies:
+    for (fn, ln, n, people) in tallies:
         p += div(
             span(ln + ', ' + fn).classes('progress-name'),
+            span('from ' + str(people)
+                 + (' classmate' if people == 1 else ' classmates')
+                 ).classes('progress-badge'),
             span(str(n) + (' shout-out' if n == 1 else ' shout-outs')
                  ).classes('progress-badge'),
         ).classes('progress-row')

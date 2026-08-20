@@ -701,11 +701,23 @@ def attendance_counts(sql):
 
 
 def endorsement_tallies(sql):
-    # Received counts per student, most-thanked first, for the staff view the
-    # instructor uses when deciding remarks. Students with zero are omitted.
+    """Per student: (first, last, thank_yous, how_many_different_classmates).
+
+    Both numbers, because the total alone cannot tell being helpful apart from having
+    a friend. The schema already stops the crudest gaming, one thank-you per classmate
+    per day, but two students can still thank each other every session and each end the
+    term on 36. That looks identical to someone thanked 36 times by 28 different people
+    unless the second number is on the page.
+
+    Nothing is blocked or capped by this. A cap would punish genuine repeated help, and
+    the instructor decides remarks by judgement anyway (#20). This just makes the shape
+    visible so the judgement is an informed one.
+    """
     return sql.execute(
-        """select s.first_name, s.last_name, count(*) as n from endorsements e
+        """select s.first_name, s.last_name, count(*) as n,
+                  count(distinct e.from_student) as people
+             from endorsements e
              join students s on e.to_student = s.student_number
             group by e.to_student
-            order by n desc, s.last_name, s.first_name"""
+            order by people desc, n desc, s.last_name, s.first_name"""
     ).fetchall()

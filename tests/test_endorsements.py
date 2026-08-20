@@ -82,14 +82,38 @@ def test_given_today_lists_who_you_thanked(db):
     assert given == [('Ben', 'Okafor')]
 
 
-def test_tally_counts_and_orders_by_most_thanked(db):
+def test_tally_reports_both_the_total_and_how_many_people(db):
     with db.cursor() as sql:
         db.add_endorsement(sql, '500111111', '500222222', DAY)
         db.add_endorsement(sql, '500333333', '500222222', DAY)
         db.add_endorsement(sql, '500222222', '500333333', DAY)
         tallies = db.endorsement_tallies(sql)
-    # Ben (2) ahead of Chloe (1); Alice, thanked by nobody, absent.
-    assert tallies == [('Ben', 'Okafor', 2), ('Chloe', 'Diaz', 1)]
+    # Ben: 2 thank-yous from 2 people. Chloe: 1 from 1. Alice, thanked by nobody, absent.
+    assert tallies == [('Ben', 'Okafor', 2, 2), ('Chloe', 'Diaz', 1, 1)]
+
+
+def test_a_reciprocal_pair_is_distinguishable_from_being_helpful(db):
+    """The gaming this exists to make visible.
+
+    Alice and Ben thank each other every session. Over three days each ends on three,
+    which the total alone cannot tell apart from being thanked three times by three
+    different classmates. The second number can: theirs is 1.
+    """
+    days = ['2026-07-28', '2026-07-29', '2026-07-30']
+    with db.cursor() as sql:
+        sql.execute("insert into students values ('Dana', 'Ng', '500444444')")
+        for day in days:
+            db.add_endorsement(sql, '500111111', '500222222', day)   # Alice -> Ben
+            db.add_endorsement(sql, '500222222', '500111111', day)   # Ben -> Alice
+        # Dana was thanked three times, by three different people.
+        for giver in ('500111111', '500222222', '500333333'):
+            db.add_endorsement(sql, giver, '500444444', days[0])
+        tallies = db.endorsement_tallies(sql)
+    by_name = {last: (n, people) for (_f, last, n, people) in tallies}
+    assert by_name['Okafor'] == (3, 1)      # three thank-yous, one person
+    assert by_name['Ng'] == (3, 3)          # three thank-yous, three people
+    # Breadth decides the order, so Dana is above the reciprocal pair.
+    assert tallies[0][1] == 'Ng' 
 
 
 # --- routes --------------------------------------------------------------
