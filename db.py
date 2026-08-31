@@ -842,18 +842,28 @@ def is_present(sql, student_number, day):
     ).fetchone() is not None
 
 
-def attendance_counts(sql):
+def attendance_counts(sql, before=None):
     """(student_number, first, last, sessions attended), most attended first.
 
     The raw signal behind the instructor's miss-more-than-half rule. Keyed on the
     student number so the progress page can look them up (#75).
+
+    `before` excludes the session currently running, and callers that show a ratio must
+    pass it (#89). The denominator counts a session once it is over, so that a student
+    is not told they are behind on the strength of one still in progress. Attendance,
+    though, lands the moment they sit down. Counting both the same way is the only thing
+    that stops a student who turned up today reading as "13 of 12", or as "1 of 0" on
+    the very first morning of term.
     """
+    where = ' where a.day < ?' if before else ''
     return sql.execute(
         """select a.student_number, s.first_name, s.last_name, count(*) as n
              from attendance a
-             join students s on a.student_number = s.student_number
-            group by a.student_number
-            order by n desc, s.last_name, s.first_name"""
+             join students s on a.student_number = s.student_number"""
+        + where +
+        """ group by a.student_number
+            order by n desc, s.last_name, s.first_name""",
+        (before,) if before else ()
     ).fetchall()
 
 
