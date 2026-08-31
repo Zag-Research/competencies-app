@@ -153,6 +153,9 @@ CREATE TABLE endorsements (
 CREATE TABLE attendance (
     student_number TEXT,
     day TEXT,
+    -- where they are sitting today, so the seat survives being entered before they
+    -- have booked anything (#83). `requests` also carries it, for the queue to read.
+    seat TEXT,
     PRIMARY KEY (student_number, day),
     FOREIGN KEY (student_number) REFERENCES students(student_number)
 );
@@ -204,7 +207,7 @@ INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
 -- file is born with everything, so this must equal the highest number in migrations/,
 -- or migrate.py would try to re-apply a change that is already here. Bump it in the
 -- same commit as any new migration; tests/test_migrations.py fails if it drifts.
-INSERT INTO settings VALUES('schema_version','2');
+INSERT INTO settings VALUES('schema_version','3');
 -- Which header mod_auth_cas publishes the student number in (see DEPLOYMENT.md). It is
 -- named <CASAttributePrefix><name>, and CASAttributePrefix is set in OUR Apache vhost,
 -- not on the CAS server, so we choose it: use CAS- (the Apache 2.4 default), never the
