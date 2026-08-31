@@ -212,16 +212,42 @@ def students_awaiting_seat(sql, studio_date):
 
 
 def set_seat(sql, student_number, seat, studio_date):
-    # The student arrived and sat down (or moved machines). One seat per student per
-    # studio day: scoped to this session so sitting down today does not stamp a seat
-    # onto a request they booked for next week, which would make them look present
-    # at a session they have not turned up to yet.
+    """The student arrived and sat down, or moved machines, or left.
+
+    Written to two places, because the seat answers two questions.
+
+    `requests` is what the staff queue reads, so a TA can see where to walk. Scoped to
+    this session, so sitting down today does not stamp a seat onto something booked for
+    next week and make them look present at a session they have not turned up to yet.
+
+    `attendance` is where the seat LIVES for the day. Requests alone were not enough:
+    a student who taps "I am here" before choosing what to demonstrate has no request
+    for the seat to land on, so it was dropped on the floor while the screen told them
+    a TA was coming. Attendance already has exactly one row per student per studio day.
+    """
     sql.execute(
         """update requests set seat = ?
             where student_number = ? and studio_date = ?
               and status in ('waiting', 'claimed')""",
         (seat, student_number, studio_date)
     )
+    sql.execute(
+        "update attendance set seat = ? where student_number = ? and day = ?",
+        (seat, student_number, studio_date)
+    )
+
+
+def seat_for(sql, student_number, day):
+    """Where this student said they are sitting today, or None (#83).
+
+    The one place to ask. A booking made after they sat down inherits from here, which
+    is what stops that ordering from losing the seat.
+    """
+    row = sql.execute(
+        "select seat from attendance where student_number = ? and day = ?",
+        (student_number, day)
+    ).fetchone()
+    return row[0] if row and row[0] else None
 
 
 def carry_bumped_forward(sql, student_number, studio_date):
