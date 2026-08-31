@@ -158,3 +158,27 @@ def test_the_flag_uses_the_students_own_denominator(db, monkeypatch):
     body = staff().get('/progress').get_data(as_text=True)
     assert 'state-cooling_off' not in badges_for(body, 'Diaz, Chloe')   # 4 of 7
     assert 'state-cooling_off' in badges_for(body, 'Chen, Alice')       # 4 of 11
+
+
+def test_the_session_happening_now_counts_on_neither_side(db, monkeypatch):
+    """Attendance lands when a student sits down; the denominator waits until the
+    session is over. Counting them differently reads as "3 of 2", and on the first
+    morning of term as "1 of 0" (#89).
+    """
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 9, 15))  # a Tuesday
+    with db_module.cursor() as sql:
+        for day in ('2026-09-08', '2026-09-09', '2026-09-10', '2026-09-15'):
+            sql.execute("insert into attendance (student_number, day)"
+                        " values ('500111111', ?)", (day,))
+    alice = badges_for(staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
+    assert '3 of 3' in alice          # today attended, but today is not over
+    assert '4 of 3' not in alice
+
+
+def test_turning_up_on_the_first_morning_is_not_one_of_zero(db, monkeypatch):
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 9, 8))
+    with db_module.cursor() as sql:
+        sql.execute("insert into attendance (student_number, day)"
+                    " values ('500111111', '2026-09-08')")
+    alice = badges_for(staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
+    assert 'of 0' not in alice

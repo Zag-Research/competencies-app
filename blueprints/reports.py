@@ -61,7 +61,10 @@ def progress():
     p += nav
     with db.cursor() as sql:
         rows = db.progress_by_student(sql)
-        attended = {number: n for (number, _f, _l, n) in db.attendance_counts(sql)}
+        # Excluding today, to match the denominator (#89): both sides count only
+        # sessions that are over, or a student present right now reads as n of n-1.
+        attended = {number: n for (number, _f, _l, n) in
+                    db.attendance_counts(sql, before=logic.today_toronto().isoformat())}
         thanked = {number: people
                    for (number, _f, _l, _n, people) in db.endorsement_tallies(sql)}
         elapsed, _total = logic.term_elapsed()
