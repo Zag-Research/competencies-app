@@ -4,6 +4,7 @@ Two uses, which is why the order is switchable. During term it answers "who shou
 TA go and encourage". At the end it answers "what do I type into D2L".
 """
 import sqlite3
+from datetime import date
 
 import pytest
 
@@ -108,3 +109,45 @@ def test_students_cannot_see_everyone_elses_progress(db):
         s['user'] = '500111111'
         s['role'] = 'student'
     assert client.get('/progress').status_code == 302
+
+
+# --- students in only one of the two courses (#81) --------------------------
+
+def only_cps109(number='500333333'):
+    """Chloe drops CPS213, so she is registered for only some studio sessions."""
+    with db_module.cursor() as sql:
+        sql.execute("delete from enrollments where student_number = ? and course = 'CPS213'",
+                    (number,))
+
+
+def badges_for(body, surname):
+    return body.split(surname)[1].split('progress-row')[0]
+
+
+def test_a_single_course_student_gets_a_count_not_a_fraction(db, monkeypatch):
+    """Nothing records which sessions each course meets, so no ratio can be honest.
+
+    Measured against the whole term Chloe looks absent for sessions she was never in,
+    and the under-half flag feeds the attendance penalty. That is a mark against
+    somebody who came to everything she signed up for.
+    """
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
+    only_cps109()
+    with db_module.cursor() as sql:
+        sql.execute("insert into attendance (student_number, day)"
+                    " values ('500333333', '2026-09-08')")
+    chloe = badges_for(staff().get('/progress').get_data(as_text=True), 'Diaz, Chloe')
+    assert '1 session' in chloe
+    assert ' of ' not in chloe
+    assert 'state-cooling_off' not in chloe
+
+
+def test_a_student_in_both_courses_still_gets_the_fraction(db, monkeypatch):
+    """The common case is untouched: the ratio and the flag are the point of the page."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
+    with db_module.cursor() as sql:
+        sql.execute("insert into attendance (student_number, day)"
+                    " values ('500111111', '2026-09-08')")
+    alice = badges_for(staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
+    assert ' of ' in alice
+    assert 'state-cooling_off' in alice     # one session is under half of the term

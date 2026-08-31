@@ -50,6 +50,7 @@ def progress():
         thanked = {number: people
                    for (number, _f, _l, _n, people) in db.endorsement_tallies(sql)}
         elapsed, _total = logic.term_elapsed()
+        course_count = len(db.all_courses(sql))
     if not rows:
         p += div('No students loaded yet.').classes('queue-empty')
         return str(p)
@@ -72,7 +73,17 @@ def progress():
         # The two things that feed Dave's remarks, next to the competencies rather than
         # folded into them, because how they count is his call not the app's.
         here = attended.get(number, 0)
-        if elapsed:
+        if course_count and len(courses) < course_count:
+            # A student in only one of the two courses is not registered for every
+            # session, and nothing in the app records which ones they are meant to be
+            # at (#81). Measured against the whole term they look absent for sessions
+            # they were never in, and the under-half flag feeds the attendance penalty,
+            # so this would mark down someone who came to everything they signed up
+            # for. Show what is known, the count, and assert no ratio. It becomes a
+            # real fraction once the timetable exists.
+            row += span(str(here) + (' session' if here == 1 else ' sessions')
+                        ).classes('progress-badge')
+        elif elapsed:
             attend = span(str(here) + ' of ' + str(elapsed)).classes('progress-badge')
             if here * 2 < elapsed:
                 attend.addClasses('state-cooling_off')
