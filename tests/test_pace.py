@@ -133,3 +133,28 @@ def test_the_term_dates_are_the_term_we_are_actually_in():
         'TERM_END is %s, which is in the past. The pace indicator is now describing a '
         'term that has ended. Update the dates or see #64.' % logic.TERM_END
     )
+
+
+# --- per-course session counts (#81) ---------------------------------------
+
+def test_each_course_meets_on_its_own_weekdays():
+    """From Dave's Fall 2026 sections: CPS109 is Tue/Thu, CPS213 is Tue/Wed."""
+    whole_term = date(2026, 12, 31)
+    assert logic.sessions_for(['CPS109'], whole_term) == (24, 24)
+    assert logic.sessions_for(['CPS213'], whole_term) == (24, 24)
+
+
+def test_a_student_in_both_courses_is_due_at_every_session():
+    assert logic.sessions_for(['CPS109', 'CPS213'], date(2026, 12, 31)) == (36, 36)
+
+
+def test_an_unknown_course_falls_back_to_the_whole_studio():
+    """A third course, or a renamed one, must not silently report a smaller denominator."""
+    assert logic.sessions_for(['CPS999'], date(2026, 12, 31)) == (36, 36)
+    assert logic.sessions_for([], date(2026, 12, 31)) == (36, 36)
+
+
+def test_todays_session_does_not_count_here_either():
+    # Sept 8 is a Tuesday, which CPS109 meets. Sitting in it, none have finished.
+    assert logic.sessions_for(['CPS109'], date(2026, 9, 8))[0] == 0
+    assert logic.sessions_for(['CPS109'], date(2026, 9, 9))[0] == 1

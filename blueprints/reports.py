@@ -17,6 +17,21 @@ reports_bp = Blueprint('reports', __name__)
 PERCENT_PER_COMPETENCY = 2
 
 
+def _due_sessions_cache():
+    """sessions_for is the same answer for every student taking the same courses.
+
+    There are two courses, so at most a handful of distinct answers across 45 students,
+    against studio_days() walking the whole term each time. Cached per call of the page.
+    """
+    cache = {}
+
+    def due(courses):
+        if courses not in cache:
+            cache[courses] = logic.sessions_for(courses)[0]
+        return cache[courses]
+    return due
+
+
 @reports_bp.route('/progress')
 def progress():
     """Everyone's progress, per course, on one page.
@@ -62,6 +77,7 @@ def progress():
 
     rows.sort(key=lambda r: (r[0], r[1]) if order == 'name' else (overall(r), r[0]))
 
+    due_sessions = _due_sessions_cache()
     for (last, first, number, courses) in rows:
         row = div().classes('progress-row')
         row += span(last + ', ' + first).classes('progress-name')
@@ -72,9 +88,15 @@ def progress():
         # The two things that feed Dave's remarks, next to the competencies rather than
         # folded into them, because how they count is his call not the app's.
         here = attended.get(number, 0)
-        if elapsed:
-            attend = span(str(here) + ' of ' + str(elapsed)).classes('progress-badge')
-            if here * 2 < elapsed:
+        # Against the sessions THIS student was due at, not the whole term (#81).
+        # CPS109 meets Tuesday and Thursday, CPS213 Tuesday and Wednesday, so someone
+        # in one course alone has no business being counted absent on the day their
+        # course does not run. The flag below feeds the attendance penalty, so getting
+        # the denominator wrong is a mark against somebody who came to everything.
+        due = due_sessions(tuple(course for (course, _d, _t) in courses))
+        if due:
+            attend = span(str(here) + ' of ' + str(due)).classes('progress-badge')
+            if here * 2 < due:
                 attend.addClasses('state-cooling_off')
             row += attend
         helped = thanked.get(number, 0)
