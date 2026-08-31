@@ -66,9 +66,8 @@ update settings set value = 'CAS-somethingelse' where key = 'cas_student_number_
    Then load the real competencies (#2) and the real roster (#61). Both tables are
    empty otherwise, and an empty roster means no student can sign in.
 
-3. **Staff list.** `schema.sql` seeds placeholders. Anyone not on this list is bounced
-   to the login page, so a missing name locks that TA out completely. Takes **CAS
-   usernames**, not student numbers.
+3. **Staff list.** See **Who gets in** below. Nothing is seeded, and a missing name
+   locks that person out silently.
    ```
    sqlite3 course-data.db "update settings set value = 'dmason s59hassa ...' where key = 'admins'"
    ```
@@ -113,6 +112,43 @@ update settings set value = 'CAS-somethingelse' where key = 'cas_student_number_
 
    No reverse proxy in front. The lab check (#46) reverse-resolves `remote_addr`, and a
    proxy would make every request look like it came from the server.
+
+## Who gets in
+
+Nobody is added automatically. Two separate lists, and being missing from either looks
+the same from the outside: the person signs in through CAS successfully, comes back, and
+is bounced to the login page as an unrecognised user. No error, nothing in a log, no
+screen anywhere that lists who is missing. It surfaces when that person tries.
+
+**Staff** are the `admins` setting: one space-separated list of **CAS usernames**, not
+student numbers. A TA who is also a student still goes here, and staff wins, so they get
+the marking screens rather than a student view.
+
+Fill this in and keep it current. It is the deployment's one hand-maintained list.
+
+| Person | Role | CAS username |
+| --- | --- | --- |
+| Dave Mason | Instructor | `dmason` |
+| Sarah Hassan | TA | `s59hassa` |
+|  | TA |  |
+|  | TA |  |
+|  | TA |  |
+
+```
+sqlite3 course-data.db "update settings set value = 'dmason s59hassa ...' where key = 'admins'"
+```
+
+**Students** are the `students` table, loaded from a class list export:
+
+```
+./venv/bin/python import_roster.py classlist.csv --course CPS109 --apply
+```
+
+An empty roster locks out every student at once, which is the same silent failure at
+scale. Run the importer for both courses.
+
+Adding someone later needs no deploy. Both are data: one is a settings row, the other is
+a re-run of the importer, and either takes effect on the next page load.
 
 ## Check it works, right after installing
 
