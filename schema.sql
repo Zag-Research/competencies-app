@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS competency_covers;
 DROP TABLE IF EXISTS link_clicks;
 DROP TABLE IF EXISTS links;
 DROP TABLE IF EXISTS evaluations;
@@ -174,6 +175,25 @@ CREATE TABLE enrollments (
     FOREIGN KEY (student_number) REFERENCES students(student_number)
 );
 
+-- Which competencies a harder one already proves (#80). Demonstrating the harder one
+-- credits everything it covers, so a slot is not spent on something already shown.
+--
+-- DIRECT links only. If nested proves simple and simple proves comparison, store those
+-- two rows and let the app follow the chain; do not also store nested -> comparison.
+-- Every row is then one local judgement, and the map stays small enough to review.
+--
+-- Empty until the list is ordered and scaffolded (#2): what proves what is a judgement
+-- about the course, not about the app.
+CREATE TABLE competency_covers (
+    -- the harder competency, the one actually demonstrated
+    competency_id INTEGER,
+    -- the competency it proves, credited without being demonstrated
+    covers_id INTEGER,
+    PRIMARY KEY (competency_id, covers_id),
+    FOREIGN KEY (competency_id) REFERENCES competencies(id),
+    FOREIGN KEY (covers_id) REFERENCES competencies(id)
+);
+
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 INSERT INTO settings VALUES('admins','dmason lfortune');
 -- Which resolved hostnames count as studio lab machines (#46). CS systems' naming is
@@ -184,7 +204,7 @@ INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
 -- file is born with everything, so this must equal the highest number in migrations/,
 -- or migrate.py would try to re-apply a change that is already here. Bump it in the
 -- same commit as any new migration; tests/test_migrations.py fails if it drifts.
-INSERT INTO settings VALUES('schema_version','1');
+INSERT INTO settings VALUES('schema_version','2');
 -- Which header mod_auth_cas publishes the student number in (see DEPLOYMENT.md). It is
 -- named <CASAttributePrefix><name>, and CASAttributePrefix is set in OUR Apache vhost,
 -- not on the CAS server, so we choose it: use CAS- (the Apache 2.4 default), never the
