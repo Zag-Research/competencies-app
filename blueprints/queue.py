@@ -90,17 +90,13 @@ def queue_join():
 
             # Passed. A seat only means "I am here now", so only a booking for today
             # inherits today's seat; a future booking starts seatless.
-            seat = None
-            if studio_date == today:
-                row = sql.execute(
-                    """select seat from requests
-                        where student_number = ? and studio_date = ?
-                          and seat is not null and seat != ''
-                          and status in ('waiting', 'claimed')
-                        limit 1""",
-                    (user, today)
-                ).fetchone()
-                seat = row[0] if row else None
+            #
+            # Read from attendance, not from their other requests (#83). A student who
+            # sat down before deciding what to demonstrate has no request carrying the
+            # seat, so looking there found nothing and this booking started seatless:
+            # invisible on the live queue, right after the app told them a TA was on
+            # the way.
+            seat = db.seat_for(sql, user, today) if studio_date == today else None
             for cid in competency_ids:
                 sql.execute(
                     """insert into requests
@@ -137,13 +133,15 @@ def queue_seat():
         # competency onto a date no staff queue ever shows.
         if seat and logic.is_studio_day(today):
             db.carry_bumped_forward(sql, user, today)
-        db.set_seat(sql, user, seat or None, today)
-        # Taking a seat IS "I am here", so it marks attendance. This is now the only
-        # writer of attendance (#46): the separate check-in button is gone. Guarded by
-        # is_studio_day so a crafted POST on a non-class day can't inflate the attended
-        # count. Leaving (an empty seat) does not un-attend: they were still here.
-        if seat and logic.is_studio_day(today):
+            # Before set_seat, because attendance is where the seat is stored and the
+            # row has to exist for the seat to land on it (#83).
             db.mark_present(sql, user, today)
+        db.set_seat(sql, user, seat or None, today)
+        # Taking a seat IS "I am here", so marking attendance above is the only writer
+        # of it now (#46): the separate check-in button is gone. Guarded by
+        # is_studio_day so a crafted POST on a non-class day can't inflate the attended
+        # count. Leaving (an empty seat) does not un-attend: they were still here, and
+        # it clears the stored seat without touching the attendance row.
     if seat:
         session['queue_notice'] = 'Seat ' + seat + ' saved. A TA will come to you.'
     else:
