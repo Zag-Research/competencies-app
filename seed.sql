@@ -128,3 +128,22 @@ INSERT INTO evaluations (student_number, competency_id, status, recorded_at, eva
 -- requests (the evaluation queue) start empty: students create them at runtime by
 -- signing up. Seeding fake ones made the staff queue show people who never signed
 -- up, and a stale seat could mask a student's real seat in the grouped view.
+
+-- competency coverage (#80): what demonstrating one competency already proves.
+--
+-- SAMPLE DATA, not the real map. seed.sql is local development only; production
+-- installs schema.sql and loads a real roster, so nothing here reaches a student.
+-- The actual map is a judgement about the course and waits on the list being ordered
+-- and scaffolded (#2). These rows exist so the feature can be seen working.
+--
+-- This chain is Dave's own example from Aug 26, that a student who can write a
+-- conditional with multiple conditions has plainly shown they understand simple ones:
+--
+--   12 Produces a conditional structure with multiple conditions
+--     -> 11 Understands the various forms of conditional structures
+--          -> 10 Uses comparison operators and boolean algebra operators
+--
+-- Two rows, not three. Direct links only; the app follows the chain, so marking 12
+-- credits 11 and 10 both.
+INSERT INTO competency_covers VALUES(12, 11);
+INSERT INTO competency_covers VALUES(11, 10);
