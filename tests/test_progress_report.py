@@ -124,30 +124,37 @@ def badges_for(body, surname):
     return body.split(surname)[1].split('progress-row')[0]
 
 
-def test_a_single_course_student_gets_a_count_not_a_fraction(db, monkeypatch):
-    """Nothing records which sessions each course meets, so no ratio can be honest.
+def test_a_single_course_student_is_measured_against_their_own_sessions(db, monkeypatch):
+    """Chloe takes CPS109, which meets Tuesday and Thursday. Wednesdays are not hers.
 
-    Measured against the whole term Chloe looks absent for sessions she was never in,
-    and the under-half flag feeds the attendance penalty. That is a mark against
-    somebody who came to everything she signed up for.
+    Against the whole term she is counted absent for every Wednesday of the studio, for
+    a session she was never registered in, and the under-half flag feeds the attendance
+    penalty. That is a mark against somebody who came to everything she signed up for.
     """
     monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
     only_cps109()
     with db_module.cursor() as sql:
         sql.execute("insert into attendance (student_number, day)"
                     " values ('500333333', '2026-09-08')")
-    chloe = badges_for(staff().get('/progress').get_data(as_text=True), 'Diaz, Chloe')
-    assert '1 session' in chloe
-    assert ' of ' not in chloe
-    assert 'state-cooling_off' not in chloe
-
-
-def test_a_student_in_both_courses_still_gets_the_fraction(db, monkeypatch):
-    """The common case is untouched: the ratio and the flag are the point of the page."""
-    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
-    with db_module.cursor() as sql:
         sql.execute("insert into attendance (student_number, day)"
                     " values ('500111111', '2026-09-08')")
-    alice = badges_for(staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
-    assert ' of ' in alice
-    assert 'state-cooling_off' in alice     # one session is under half of the term
+    body = staff().get('/progress').get_data(as_text=True)
+    # Same one session attended, different denominators: Alice is due on all three
+    # weekdays, Chloe only on two of them.
+    assert '1 of 7' in badges_for(body, 'Diaz, Chloe')
+    assert '1 of 11' in badges_for(body, 'Chen, Alice')
+
+
+def test_the_flag_uses_the_students_own_denominator(db, monkeypatch):
+    """Four of Chloe's seven is over half, so she is not flagged. Alice's is under."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
+    only_cps109()
+    with db_module.cursor() as sql:
+        for day in ('2026-09-08', '2026-09-10', '2026-09-15', '2026-09-17'):
+            sql.execute("insert into attendance (student_number, day) values"
+                        " ('500333333', ?)", (day,))
+            sql.execute("insert into attendance (student_number, day) values"
+                        " ('500111111', ?)", (day,))
+    body = staff().get('/progress').get_data(as_text=True)
+    assert 'state-cooling_off' not in badges_for(body, 'Diaz, Chloe')   # 4 of 7
+    assert 'state-cooling_off' in badges_for(body, 'Chen, Alice')       # 4 of 11

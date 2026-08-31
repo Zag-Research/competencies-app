@@ -90,6 +90,25 @@ def cooling_off_label(date_recorded):
 # studio is not running then. TERM_START/TERM_END below bound the term for counting
 # sessions (#50); they are not enforced as a sign-up window.
 STUDIO_WEEKDAYS = (1, 2, 3)
+
+# Which of those weekdays each course actually meets on (#81). From Dave's Fall 2026
+# sections in the TMU timetable, all four components his, all in George Vari Rm 206:
+#
+#   Tuesday    CPS213 LAB then CPS109 LAB     both courses
+#   Wednesday  CPS213 LEC                     213 only
+#   Thursday   CPS109 LEC                     109 only
+#
+# This is what makes an attendance fraction honest for a student taking only one of
+# the two. Measured against all three days, somebody registered in CPS109 alone is
+# counted absent every Wednesday of the term, for a session they were never in, and
+# the instructor's rule is a penalty for missing more than half.
+#
+# A course missing from here falls back to every studio day, so an unknown course
+# behaves as it did before rather than silently reporting a smaller denominator.
+COURSE_WEEKDAYS = {
+    'CPS109': (1, 3),
+    'CPS213': (1, 2),
+}
 # Fallback only. The real value is the `studio_lookahead` setting, read by callers, so
 # how far ahead students can book is a config change rather than a deploy (#17).
 STUDIO_LOOKAHEAD = 6
@@ -341,3 +360,26 @@ def covered_by(competency_id, edges):
         seen.add(current)
         queue.extend(edges.get(current, ()))
     return seen
+
+
+def sessions_for(courses, today=None):
+    """(sessions_done, sessions_total) for a student taking exactly `courses` (#81).
+
+    The denominator is the studio days that student was actually expected at, not the
+    whole term. Somebody in CPS109 alone is due on Tuesdays and Thursdays, so their
+    Wednesdays are not absences.
+
+    A course we have no weekday map for contributes every studio weekday, which keeps
+    an unrecognised course reporting the same denominator it did before this existed.
+
+    Same "a session counts once it is over" rule as term_elapsed: the session a student
+    is sitting in should not yet count against them.
+    """
+    today = today or today_toronto()
+    weekdays = set()
+    for course in courses:
+        weekdays |= set(COURSE_WEEKDAYS.get(course, STUDIO_WEEKDAYS))
+    if not weekdays:
+        weekdays = set(STUDIO_WEEKDAYS)
+    days = [day for day in studio_days() if day.weekday() in weekdays]
+    return sum(1 for day in days if day < today), len(days)
