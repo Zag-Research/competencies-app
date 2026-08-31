@@ -313,3 +313,31 @@ def session_signup_ok(course_counts, cap):
     if counts and max(counts) - min(counts) > 1:
         return False
     return True
+
+
+def covered_by(competency_id, edges):
+    """Everything demonstrating this competency proves, following the chain (#80).
+
+    `edges` maps a competency to the ones it DIRECTLY covers. The chain is followed
+    because covering is transitive: if nested ifs proves simple ifs and simple ifs
+    proves comparison operators, then nested ifs proves comparison operators. Storing
+    only direct links keeps the map small and every row a judgement someone can
+    actually make, and this is what makes that storage enough.
+
+    Guards against cycles. Somebody will eventually write "X covers Y" and "Y covers
+    X", which is wrong but easy to do halfway through a list of eighty, and without
+    `seen` that pair is an infinite loop that hangs the marking screen mid-session.
+    Here it just terminates.
+
+    The starting competency is never in the result, even if a cycle leads back to it:
+    demonstrating something does not credit it, marking it does.
+    """
+    seen = set()
+    queue = list(edges.get(competency_id, ()))
+    while queue:
+        current = queue.pop()
+        if current in seen or current == competency_id:
+            continue
+        seen.add(current)
+        queue.extend(edges.get(current, ()))
+    return seen

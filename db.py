@@ -7,6 +7,9 @@ from contextlib import closing, contextmanager
 import os
 import sqlite3
 
+# Pure rules only, and logic imports nothing from here, so this stays one-way.
+import logic
+
 # Relative default for local dev; set an absolute DB_PATH in production, since under
 # Apache/mod_wsgi the working directory is not the project folder. See DEPLOYMENT.md.
 DB_PATH = os.environ.get("DB_PATH", "course-data.db")
@@ -515,6 +518,102 @@ def achieved_competency_ids(sql, student_number):
     return {row[0] for row in rows}
 
 
+def coverage_edges(sql):
+    """Which competencies each one DIRECTLY covers, as {id: {ids}} (#80).
+
+    Direct links only, as stored. logic.covered_by follows the chain from here, so
+    nobody has to write out the implied pairs or keep them in sync.
+    """
+    edges = {}
+    for (competency_id, covers_id) in sql.execute(
+            "select competency_id, covers_id from competency_covers"):
+        edges.setdefault(competency_id, set()).add(covers_id)
+    return edges
+
+
+def _credit_covered(sql, student_number, competency_id):
+    """Pass everything this competency proves, without recording an evaluation (#80).
+
+    Two rules, and the second is what makes an undo possible later:
+
+    - Only competencies with NO row in `achievements` are credited. A competency the
+      student has already been marked on, passed or not, keeps the result a TA gave
+      it. A credit never overwrites somebody's evaluation.
+    - Nothing is written to `evaluations`. One sitting of work happened, on the
+      competency that was actually demonstrated, and the per-evaluator report counts
+      sittings. Writing a row per credited competency would inflate that TA's count
+      to five for one evaluation.
+
+    Together those mean a credited pass is exactly a pass with no evaluation behind
+    it, which is how _remove_credits finds them again. No extra column needed.
+
+    The id is coerced because it does not always arrive as one. `/save/<competency_id>`
+    is an untyped route, so that screen hands over the string '4' while the queue screen
+    hands over the integer 4. SQLite compares them the same, so the achievement row
+    lands either way, but a dict lookup does not: the string missed every edge and the
+    whole feature quietly did nothing from one of the two marking screens.
+    """
+    covered = logic.covered_by(int(competency_id), coverage_edges(sql))
+    for covered_id in covered:
+        sql.execute(
+            "insert into achievements "
+            "(student_number, competency_id, status, date_recorded) "
+            "select ?, ?, 'achieved', CURRENT_TIMESTAMP "
+            " where not exists (select 1 from achievements "
+            "                    where student_number = ? and competency_id = ?)",
+            (student_number, covered_id, student_number, covered_id)
+        )
+
+
+def _remove_credits(sql, student_number, competency_id):
+    """Take back the passes that only existed because of this one (#80).
+
+    Called after the competency itself is cleared, so it is already gone from the
+    student's achieved set by the time we ask what is still proven.
+
+    The mis-tap this exists for: a TA taps the wrong student, that one tap credits
+    four other competencies, and the undo a second later clears only the one they
+    tapped. Without this the student keeps four passes nobody tested them on, and
+    because credits leave no evaluation row there is no screen that would ever show
+    why.
+
+    Two things survive an undo:
+
+    - anything the student EARNED. A competency with an evaluation row behind it was
+      marked by a TA, and this had nothing to do with it.
+    - anything still proven by something else they passed. If two competencies both
+      cover simple ifs and only one is undone, the other still proves it.
+    """
+    edges = coverage_edges(sql)
+    # Coerced for the same reason as in _credit_covered: one marking screen sends a
+    # string, and a dict lookup does not forgive that the way SQLite does.
+    candidates = logic.covered_by(int(competency_id), edges)
+    if not candidates:
+        return
+    # Only what the student EARNED can justify keeping a credit. Asking "is anything
+    # they hold still proving this" would count the credits themselves: undoing nested
+    # ifs would find simple ifs still sitting there, credited by the very tap being
+    # undone, and let it justify keeping comparison operators. The chain would survive
+    # its own undo. An earned pass is one with an evaluation row behind it.
+    still_proven = set()
+    for (other_id,) in sql.execute(
+            "select a.competency_id from achievements a"
+            " where a.student_number = ? and a.status = 'achieved'"
+            "   and exists (select 1 from evaluations e"
+            "                where e.student_number = a.student_number"
+            "                  and e.competency_id = a.competency_id)",
+            (student_number,)):
+        still_proven |= logic.covered_by(other_id, edges)
+    for covered_id in candidates - still_proven:
+        sql.execute(
+            "delete from achievements "
+            " where student_number = ? and competency_id = ? "
+            "   and not exists (select 1 from evaluations "
+            "                    where student_number = ? and competency_id = ?)",
+            (student_number, covered_id, student_number, covered_id)
+        )
+
+
 def record_achievement(sql, student_number, competency_id, status, evaluated_by):
     """Record one evaluation, from whichever marking screen produced it.
 
@@ -546,6 +645,10 @@ def record_achievement(sql, student_number, competency_id, status, evaluated_by)
         "values (?, ?, ?, CURRENT_TIMESTAMP, ?)",
         (student_number, competency_id, status, evaluated_by)
     )
+    # A pass credits everything it proves (#80). Only on a pass: failing nested ifs
+    # says nothing either way about simple ifs.
+    if status == 'achieved':
+        _credit_covered(sql, student_number, competency_id)
 
 
 def clear_achievement(sql, student_number, competency_id):
@@ -569,6 +672,7 @@ def clear_achievement(sql, student_number, competency_id):
         "   order by id desc limit 1)",
         (student_number, competency_id)
     )
+    _remove_credits(sql, student_number, competency_id)
 
 
 def links_newest_first(sql):
