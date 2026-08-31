@@ -29,10 +29,20 @@ CAS sends two headers and the app needs both:
 
 | Header | Carries |
 |--------|---------|
-| `Cas-User` | TMU username, e.g. `achen`. Staff resolve from this, since their username is the admin key. |
+| `Cas-User` | whoever CAS says you are. Staff resolve from this, so it is what the `admins` list must contain. |
 | `CAS-studentnumber` | student number. Students resolve from this. |
 
-`Cas-User` never contains the student number, whatever attributes are released.
+> **We have not verified what TMU's CAS puts in `Cas-User`.** mod_auth_cas documents it
+> as a short username, but it could be a student number or an email, and nothing we can
+> run before deploy will tell us. Guessing wrong locks out every TA including the
+> instructor.
+>
+> So do not guess. Sign in once and read it off the screen: an identity the app does not
+> recognise gets a page saying exactly what CAS sent, and that string is what goes in
+> `admins`. It is a row update, so the fix takes effect immediately.
+
+`Cas-User` never contains the student number, whatever attributes are released. That is
+a separate attribute and needs SAML validation, below.
 
 > **Attributes only arrive through SAML validation, and that is our config, not CCS's.**
 > CCS confirmed their end is identical for SAML 1.1 and CAS 2.0/3.0, so the protocol on
@@ -116,13 +126,20 @@ update settings set value = 'CAS-somethingelse' where key = 'cas_student_number_
 ## Who gets in
 
 Nobody is added automatically. Two separate lists, and being missing from either looks
-the same from the outside: the person signs in through CAS successfully, comes back, and
-is bounced to the login page as an unrecognised user. No error, nothing in a log, no
-screen anywhere that lists who is missing. It surfaces when that person tries.
+the same from the outside: the person signs in through CAS successfully and the app does
+not know who they are. It surfaces when that person tries, and nowhere else.
 
-**Staff** are the `admins` setting: one space-separated list of **CAS usernames**, not
-student numbers. A TA who is also a student still goes here, and staff wins, so they get
-the marking screens rather than a student view.
+They are not left guessing. In production they get a page saying who CAS signed them in
+as and whether the student number attribute arrived, so the fix is reading one string off
+a screen and adding it to a list.
+
+**Staff** are the `admins` setting: one space-separated list of whatever CAS puts in
+`Cas-User`. A TA who is also a student still goes here, and staff wins, so they get the
+marking screens rather than a student view.
+
+If you are unsure what to put in it, put nothing and sign in. The app will show you the
+identifier it was handed, and that is the string to use. Fill the table below in from
+what you see, not from what you expect.
 
 Fill this in and keep it current. It is the deployment's one hand-maintained list.
 

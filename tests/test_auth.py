@@ -186,3 +186,53 @@ def test_production_without_a_cas_header_is_anonymous(db, monkeypatch):
     resp = app_module.app.test_client().post('/save/500111111/1/achieved')
     assert resp.status_code == 403
     assert achievement_count() == 0
+
+
+# --- production: CAS knows you, the app does not (#90) ----------------------
+
+def production(monkeypatch):
+    """The app as it runs behind Apache: identity comes from headers, not the form."""
+    import app as app_module
+    monkeypatch.setitem(app_module.app.config, 'ENV', 'production')
+    return app_module.app.test_client()
+
+
+def test_an_unrecognised_person_is_told_what_cas_actually_sent(db, monkeypatch):
+    """The whole point: nobody can verify in advance what TMU puts in Cas-User.
+
+    Whoever hits this first reads their own identifier off the screen, and that exact
+    string goes into the admins setting. No guessing, and no redeploy.
+    """
+    body = production(monkeypatch).get(
+        '/login', headers={'Cas-User': 'whatever.cas.sends'}).get_data(as_text=True)
+    assert 'whatever.cas.sends' in body
+    assert 'not on a list' in body
+
+
+def test_it_says_whether_the_student_number_attribute_arrived(db, monkeypatch):
+    """Staff never need the attribute, so a staff-only check would pass while every
+    student login was broken. This is where that becomes visible."""
+    client = production(monkeypatch)
+    missing = client.get('/login', headers={'Cas-User': 'someone'}).get_data(as_text=True)
+    assert 'not sent' in missing
+    assert 'not releasing attributes' in missing
+
+    arrived = client.get('/login', headers={'Cas-User': 'someone',
+                                            'CAS-studentnumber': '500111111'}
+                         ).get_data(as_text=True)
+    assert '500111111' in arrived
+    assert 'not releasing attributes' not in arrived
+
+
+def test_the_dev_login_form_is_not_reachable_in_production(db, monkeypatch):
+    """It sets a session production ignores, so it is a dead end that looks like a fix."""
+    body = production(monkeypatch).get(
+        '/login', headers={'Cas-User': 'someone'}).get_data(as_text=True)
+    assert 'Sign in' not in body
+    assert 'name="username"' not in body
+
+
+def test_development_still_gets_the_login_form(db):
+    import app as app_module
+    body = app_module.app.test_client().get('/login').get_data(as_text=True)
+    assert 'name="username"' in body
