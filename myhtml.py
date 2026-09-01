@@ -118,8 +118,13 @@ class page():
 	def __init__(self):
 		self.head=head(
 			meta(http_equiv="Content-Type",content="text/html; charset=UTF-8"),
+			# Without this a phone lays the page out at a virtual 980px and shrinks the
+			# result to fit, so everything is unreadably small and zooming in means
+			# scrolling sideways to reach the achieved/not-assessed badges (#96). Dave
+			# asked for the app to work on a phone; this is what makes the CSS apply.
+			meta(name="viewport",content="width=device-width, initial-scale=1"),
 			meta(name="keywords",content="Toronto Metropolitan University Computer Science Admin"),
-			title("Computer Science Admin"),
+			title("Competency Tracker"),
 			)
 		self.body=body()
 		self.html=html(self.head,self.body,xmlns="http://www.w3.org/1999/xhtml")#.classes('mine','other')
