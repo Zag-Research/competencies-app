@@ -236,3 +236,22 @@ def test_development_still_gets_the_login_form(db):
     import app as app_module
     body = app_module.app.test_client().get('/login').get_data(as_text=True)
     assert 'name="username"' in body
+
+
+def test_every_page_carries_the_mobile_viewport(db):
+    """Dave asked for this to work on a phone (#96).
+
+    Without the tag, a phone lays the page out at a virtual 980px and scales the result
+    down, so the CSS never applies at the real screen width. Text comes out unreadably
+    small, and zooming in means scrolling sideways to reach the achieved badges at the
+    right of every row. It reads as content being cut off.
+    """
+    body = client_as('dmason', 'staff').get('/queue').get_data(as_text=True)
+    assert 'name="viewport"' in body
+    assert 'width=device-width' in body
+
+
+def test_the_tab_says_what_the_app_is(db):
+    """It said "Computer Science Admin", inherited from the template myhtml came from."""
+    body = client_as('dmason', 'staff').get('/queue').get_data(as_text=True)
+    assert '<title>Competency Tracker</title>' in body
