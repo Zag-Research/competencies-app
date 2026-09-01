@@ -444,3 +444,45 @@ def test_undo_only_works_on_your_own_mark(db, staff):
             " where student_number = '500111111' and competency_id = 1"
         ).fetchone()[0]
     assert still_there == 1   # dmason's mark survived; lfortune could not touch it
+
+
+# --- the third option belongs on both screens (#102) ------------------------
+
+def test_cant_evaluate_is_offered_in_the_by_competency_view_too(db, staff):
+    """It was only on the per-student screen.
+
+    Every row in a cohort is one student's request for one competency, so handing it
+    back means exactly what it means on the other screen. Without it, a TA who has done
+    five of six and hits one they cannot assess could only release the whole cohort,
+    giving back the five they were about to do as well.
+    """
+    add_request('500111111', 1)
+    add_request('500222222', 1)
+    with db_module.cursor() as sql:
+        db_module.claim_competency_group(sql, 1, 'dmason', STUDIO)
+    body = staff.get('/queue/competency/1').get_data(as_text=True)
+    assert 'queue-defer' in body
+    assert '/queue/decline/' in body
+
+
+def test_declining_from_a_cohort_returns_to_the_cohort(db, staff):
+    """A TA working through a cohort should not be bounced to the other screen."""
+    rid = add_request('500111111', 1)
+    with db_module.cursor() as sql:
+        db_module.claim_competency_group(sql, 1, 'dmason', STUDIO)
+    landed = staff.post('/queue/decline/%d?back=competency' % rid)
+    assert landed.headers['Location'].endswith('/queue/competency/1')
+
+
+def test_declining_from_a_cohort_still_hands_back_only_that_one(db, staff):
+    """The rest of the cohort stays claimed, which is the whole point of the button."""
+    mine = add_request('500111111', 1)
+    theirs = add_request('500222222', 1)
+    with db_module.cursor() as sql:
+        db_module.claim_competency_group(sql, 1, 'dmason', STUDIO)
+    staff.post('/queue/decline/%d?back=competency' % mine)
+    with db_module.cursor() as sql:
+        handed_back = sql.execute(
+            'select status, bumped_by from requests where id = ?', (mine,)).fetchone()
+    assert handed_back == ('waiting', 'dmason')
+    assert request_row(theirs)[0] == 'claimed'

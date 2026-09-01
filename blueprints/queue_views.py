@@ -490,6 +490,18 @@ def queue_cohort_view(competency_id, evaluator):
             action=url_for('queue.queue_mark', request_id=rid, state='cooling_off',
                            back='competency')
         )
+        # The same third option as the per-student screen (#102). Every row here is one
+        # student's request for this one competency, so handing it back means exactly
+        # what it means there.
+        #
+        # It was missing, and the only way out was releasing the whole cohort. A TA who
+        # has done five of six and hits one they cannot assess had to give back the
+        # five they were about to do as well, which is a bad trade for a common case.
+        actions += form(
+            button("Can't evaluate", type='submit').classes('roster-link', 'queue-defer'),
+            method='post',
+            action=url_for('queue.queue_decline', request_id=rid, back='competency')
+        )
         # Claiming the cohort claimed each student whole, so this TA also holds
         # whatever else they asked for. Link through so it can be marked in the
         # same visit rather than making the student rejoin the queue.
