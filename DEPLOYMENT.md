@@ -173,6 +173,30 @@ scale. Run the importer for both courses.
 Adding someone later needs no deploy. Both are data: one is a settings row, the other is
 a re-run of the importer, and either takes effect on the next page load.
 
+## If the studio lab check refuses everybody
+
+Entering a seat is the one action locked to the studio, and it is also the only thing
+that marks a student present. It tests the reverse-resolved hostname against
+`lab_host_pattern`, currently `eng\d{3}-\d+`, which came from CS systems' naming
+convention and has never been checked against a real machine.
+
+If it is wrong, every student in the room is refused and marked absent.
+
+A refused student's screen names the machine it resolved, so read it off there:
+
+```
+sqlite3 course-data.db "update settings set value='eng-\d{3}-\d+' where key='lab_host_pattern'"
+```
+
+If it needs to be off entirely while you work it out, this lets everybody through:
+
+```
+sqlite3 course-data.db "update settings set value='.*' where key='lab_host_pattern'"
+```
+
+Both take effect on the next page load. Attendance keeps working either way, which is
+what matters on the day.
+
 ## Check it works, right after installing
 
 - Any page redirects through CAS and comes back signed in.

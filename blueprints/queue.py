@@ -6,7 +6,7 @@ from flask import Blueprint, request, url_for, session, redirect
 from myhtml import *
 import db
 import logic
-from common import current_user, page_header, request_is_in_lab
+from common import current_user, page_header, lab_check
 from blueprints.queue_views import (
     queue_student_view, queue_staff_view, queue_cohort_view, queue_evaluate_view)
 
@@ -117,9 +117,14 @@ def queue_seat():
     # The one location-gated action (#46): a seat means "I am here", so it has to come
     # from a machine that is actually here. Enforced server-side as well as hidden in
     # the view, because a hidden control is not a check.
-    if not request_is_in_lab():
-        session['queue_notice'] = ('Seat numbers can only be entered from a lab '
-                                   'machine in the studio.')
+    in_lab, _address, hostname = lab_check()
+    if not in_lab:
+        # Same reasoning as the view (#100): name what was resolved, so a student
+        # refused while sitting in the studio is holding the answer.
+        session['queue_notice'] = (
+            'Seat numbers can only be entered from a lab machine in the studio. '
+            + ('This machine says it is ' + hostname + '. ' if hostname else '')
+            + 'If you are in the studio, show this to a TA.')
         return redirect(url_for('queue.queue'))
     seat = request.form.get('seat', '').strip()
     # A seat is only ever about the session running today: it means "I am here, at
