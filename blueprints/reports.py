@@ -12,9 +12,14 @@ from common import current_user, page_header
 
 reports_bp = Blueprint('reports', __name__)
 
-# Each competency is worth 2% of the course (#22), so 40 of them is the 80% Dave
-# describes as the ceiling before remarks.
-PERCENT_PER_COMPETENCY = 2
+# What the competencies are worth in total (#22). Dave's design is that passing all of
+# them puts a student at roughly 80%, and the rest comes from his remarks.
+#
+# A share PER competency was hardcoded here at 2%, which is only correct while a course
+# has exactly 40 of them (#98). The list is not final, and one added or retired
+# competency would have quietly made a perfect student read 82% or 78%. Derived from the
+# count instead, so the list can change and this number stays honest.
+COMPETENCIES_ARE_WORTH = 80
 
 
 def _due_sessions_cache():
@@ -85,7 +90,8 @@ def progress():
         row = div().classes('progress-row')
         row += span(last + ', ' + first).classes('progress-name')
         for (course, done, total) in courses:
-            row += span(course + ' ' + str(done * PERCENT_PER_COMPETENCY) + '%'
+            share = logic.percent(done * COMPETENCIES_ARE_WORTH, total * 100) if total else 0
+            row += span(course + ' ' + str(share) + '%'
                         ).classes('progress-badge').addClasses(
                             'state-achieved' if done else 'state-unassessed')
         # The two things that feed Dave's remarks, next to the competencies rather than
