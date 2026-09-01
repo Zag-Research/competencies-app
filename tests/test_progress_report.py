@@ -76,11 +76,27 @@ def test_a_part_time_student_only_lists_their_course(db):
 
 # --- the page -------------------------------------------------------------
 
-def test_percentages_are_two_per_competency(db):
-    """40 competencies at 2% is the 80% ceiling before remarks (#22)."""
+def test_the_competencies_are_worth_eighty_percent_between_them(db):
+    """Dave's design: passing all of them is roughly 80%, remarks are the rest (#22).
+
+    The fixture has two competencies per course, so one of them is half the course's
+    share. That the arithmetic works at two and not only at forty is the point (#98).
+    """
     passed('500111111', 1)
-    body = staff().get('/progress').get_data(as_text=True)
-    assert 'CPS109 2%' in body
+    assert 'CPS109 40%' in staff().get('/progress').get_data(as_text=True)
+
+
+def test_a_perfect_student_reads_eighty_whatever_the_list_length(db):
+    """The share per competency was hardcoded at 2%, which is only right at exactly 40.
+
+    The list is not final, and one competency added or retired would quietly have made
+    a student who passed everything read 82% or 78% (#98).
+    """
+    with db_module.cursor() as sql:
+        sql.execute("insert into competencies (id, name, course)"
+                    " values (99, 'A late addition', 'CPS109')")
+    passed('500111111', 1, 2, 99)                      # every CPS109 competency there is
+    assert 'CPS109 80%' in staff().get('/progress').get_data(as_text=True)
 
 
 def test_furthest_behind_is_first_by_default(db):
