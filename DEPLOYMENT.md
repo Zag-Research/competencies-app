@@ -69,12 +69,18 @@ update settings set value = 'CAS-somethingelse' where key = 'cas_student_number_
    python3 -m venv venv && ./venv/bin/pip install -r requirements.txt mod_wsgi
    ```
 
-2. **Database**
+2. **Database.** Two files, in this order. Never a third.
    ```
-   sqlite3 course-data.db < schema.sql
+   sqlite3 course-data.db < schema.sql          # tables
+   sqlite3 course-data.db < competencies.sql    # the real 80 competencies
    ```
-   Then load the real competencies (#2) and the real roster (#61). Both tables are
-   empty otherwise, and an empty roster means no student can sign in.
+   > **Do not run `seed.sql` here.** It is sample data for local development: five
+   > students who do not exist, their results, and sample competency coverage pairs.
+   > On a real deployment it puts fake students on the roster and credits real TAs
+   > with evaluations they never did, and nothing about it errors.
+
+   Then load the real roster, see **Who gets in** below. Without it no student can
+   sign in.
 
 3. **Staff list.** See **Who gets in** below. Nothing is seeded, and a missing name
    locks that person out silently.
