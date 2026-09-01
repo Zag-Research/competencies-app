@@ -219,3 +219,41 @@ def test_undo_from_the_mark_screen_takes_the_credits_back_too(db):
         assert state(sql, 1) is None
         assert state(sql, 2) is None
         assert state(sql, 3) is None
+
+
+# --- the tap has to be visible, not just correct (#104) ---------------------
+
+def test_a_tap_replies_with_every_state_it_changed(db):
+    """The marking page saves each tap without reloading, and repainted only the group
+    that was clicked. So a tap that credited two more competencies left them reading
+    "Not assessed" until somebody happened to reload: the feature worked and was
+    invisible, which is worse than not having it.
+
+    The reply now carries the student's whole result map, so the page can repaint all
+    of it.
+    """
+    client = signed_in_as('dmason', 'staff')
+    reply = client.post('/save/500111111/1/achieved')
+    assert reply.status_code == 200
+    states = reply.get_json()
+    assert states['1'] == 'achieved'      # the one tapped
+    assert states['2'] == 'achieved'      # credited: nested proves simple
+    assert states['3'] == 'achieved'      # and simple proves comparison
+    assert '4' not in states              # untouched, so absent
+
+
+def test_an_undo_reply_shows_the_credits_gone(db):
+    client = signed_in_as('dmason', 'staff')
+    client.post('/save/500111111/1/achieved')
+    states = client.post('/save/500111111/1/unassessed').get_json()
+    assert states == {}
+
+
+def test_the_reply_reflects_marks_made_elsewhere(db):
+    """Whole map rather than a diff, so the page is right even if another tab marked
+    this student a moment ago."""
+    with db.cursor() as sql:
+        db.record_achievement(sql, '500111111', 4, 'cooling_off', 'lfortune')
+    states = signed_in_as('dmason', 'staff').post(
+        '/save/500111111/1/achieved').get_json()
+    assert states['4'] == 'cooling_off'

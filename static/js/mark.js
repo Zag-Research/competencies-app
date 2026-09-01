@@ -16,10 +16,15 @@ document.addEventListener('click', async function (event) {
         if (!response.ok) {
             throw new Error('Save failed: ' + response.status);
         }
-        // Move the active highlight to the clicked button, within its group.
-        const group = btn.closest('.mark-group');
-        group.querySelectorAll('.mark-btn').forEach(function (other) {
-            const active = (other === btn);
+        // The server replies with every result this student now has, because one tap
+        // can change several. Passing a competency credits everything it covers, and
+        // undoing it takes those credits back. Repainting only the group that was
+        // clicked left the credited ones reading "Not assessed" until a reload, so the
+        // feature worked and was invisible.
+        const states = await response.json();
+        document.querySelectorAll('.mark-btn').forEach(function (other) {
+            const state = states[other.dataset.competency] || 'unassessed';
+            const active = (other.dataset.state === state);
             other.classList.toggle('is-active', active);
             other.setAttribute('aria-pressed', active ? 'true' : 'false');
         });
