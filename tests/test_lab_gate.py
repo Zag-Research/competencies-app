@@ -241,3 +241,60 @@ def test_the_override_does_nothing_off_a_studio_day(db, monkeypatch):
     monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 7, 25))  # Saturday
     staff_client().post('/queue/seat-for/500111111', data={'seat': '14'})
     assert attendance_count() == 0
+
+
+# --- the refusal has to say what it saw (#100) ------------------------------
+
+def student_page(app, student='500111111'):
+    return app.test_client().get('/queue', headers=student_headers(student)
+                                 ).get_data(as_text=True)
+
+
+def test_a_refusal_names_the_machine_it_resolved(db, in_production, monkeypatch):
+    """The pattern has never been tested against a real studio machine.
+
+    If it is even slightly wrong, every student in the room is refused, and a message
+    that only says "use a lab machine" tells nobody why. Naming the resolved hostname
+    puts the answer on the first blocked student's screen: somebody reads the real name
+    off it and puts it in lab_host_pattern, which is a row update, no redeploy.
+    """
+    resolves_to(monkeypatch, 'eng-201-05.ecb.torontomu.ca')     # a plausible near miss
+    body = student_page(in_production)
+    assert 'eng-201-05.ecb.torontomu.ca' in body
+    assert 'show this to a TA' in body
+
+
+def test_it_says_so_when_nothing_resolved(db, in_production, monkeypatch):
+    """No reverse entry is both a student at home and a DNS server that did not answer,
+    and the difference matters to whoever is debugging it."""
+    resolves_to(monkeypatch, None)
+    body = student_page(in_production)
+    assert 'no name we could look up' in body
+
+
+def test_a_student_in_the_lab_is_not_shown_any_of_this(db, in_production, monkeypatch):
+    resolves_to(monkeypatch, 'eng201-04.cs.torontomu.ca')
+    body = student_page(in_production)
+    assert 'show this to a TA' not in body
+    assert 'Where are you sitting?' in body
+
+
+def test_the_posted_refusal_names_it_too(db, in_production, monkeypatch):
+    """A student who submits anyway, or whose page was stale, gets the same answer."""
+    resolves_to(monkeypatch, 'eng-201-05.ecb.torontomu.ca')
+    client = in_production.test_client()
+    client.post('/queue/seat', data={'seat': '12'}, headers=student_headers())
+    body = client.get('/queue', headers=student_headers()).get_data(as_text=True)
+    assert 'eng-201-05.ecb.torontomu.ca' in body
+
+
+def test_relaxing_the_pattern_lets_everybody_in(db, in_production, monkeypatch):
+    """The escape hatch, and the reason this is survivable on the first morning.
+
+    If the pattern turns out to be wrong, one row update opens the gate and attendance
+    keeps working while it is fixed properly.
+    """
+    resolves_to(monkeypatch, 'anything-at-all.example.com')
+    with db_module.cursor() as sql:
+        sql.execute("update settings set value = '.*' where key = 'lab_host_pattern'")
+    assert 'Where are you sitting?' in student_page(in_production)

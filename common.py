@@ -17,26 +17,35 @@ import logic
 _HOSTNAME_CACHE = {}
 
 
-def request_is_in_lab():
-    """True if this request came from a machine in the studio lab (#46).
+def lab_check():
+    r"""Is this request from a studio lab machine? (in_lab, address, resolved_name).
 
-    The one location-gated action is a student entering their seat number. Everything
-    else in the app is open from anywhere, per Dave on #46.
+    The one location-gated action is a student entering their seat number (#46).
+    Everything else in the app is open from anywhere, per Dave.
 
     Method from CS systems: reverse-resolve the caller's address and test the name
-    against the lab pattern. The pattern comes from `settings` so the room or its
-    naming can change, and so the gate can be relaxed in an emergency, without a
-    deploy.
+    against the lab pattern, which lives in `settings` so the room or its naming can
+    change, and so the gate can be relaxed in an emergency, without a deploy.
 
-    Development is always treated as in-lab, the same bargain current_user() makes
-    with CAS. Requiring a lab machine to work on the app locally would be absurd.
+    Development is always in-lab, the same bargain current_user() makes with CAS.
+    Requiring a lab machine to work on the app locally would be absurd.
 
-    Failure is treated as "not in the lab". A home address simply has no eng20x-xx
-    name, and that is indistinguishable from DNS being unreachable, so the safe
-    reading of "I could not resolve this" is "not a lab machine".
+    Failure counts as not in the lab. A home address simply has no eng20x-xx name, and
+    that is indistinguishable from DNS being unreachable, so the safe reading of "I
+    could not find out" is no.
+
+    The address and name come back too (#100).
+
+    Split out so a refusal can say what was actually resolved (#100). The pattern
+    `eng\d{3}-\d+` came from CS systems' naming convention and has never been tested
+    against a real studio machine. If it is even slightly wrong, every student in the
+    room is refused, and the message they get today would tell nobody why.
+
+    `name` is None when nothing resolved, which is both a student at home and a DNS
+    server that did not answer.
     """
     if current_app.config.get('ENV') != 'production':
-        return True
+        return True, None, None
     address = request.remote_addr
     hostname = _HOSTNAME_CACHE.get(address)
     if hostname is None:
@@ -45,9 +54,10 @@ def request_is_in_lab():
         except OSError:
             # Not cached: a transient DNS failure must not lock this address out for
             # the life of the process.
-            return False
+            return False, address, None
         _HOSTNAME_CACHE[address] = hostname
-    return logic.is_lab_host(hostname, db.get_setting('lab_host_pattern'))
+    return (logic.is_lab_host(hostname, db.get_setting('lab_host_pattern')),
+            address, hostname)
 
 
 def current_user():

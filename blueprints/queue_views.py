@@ -6,7 +6,7 @@ from flask import url_for, session
 from myhtml import *
 import db
 import logic
-from common import current_user, page_header, request_is_in_lab
+from common import current_user, page_header, lab_check
 
 
 def queue_student_view(student_number):
@@ -62,9 +62,27 @@ def queue_student_view(student_number):
     # entering a seat is also how a student who came to work rather than be evaluated
     # gets counted present, and how a bumped competency (#19/#24) is carried forward.
     if logic.is_studio_day(today):
-        if not request_is_in_lab():
-            p += div('Seat numbers can only be entered from a lab machine in the '
-                     'studio.').classes('queue-notice')
+        in_lab, address, hostname = lab_check()
+        if not in_lab:
+            # Say what was actually resolved (#100). The pattern this is tested against
+            # came from CS systems' naming convention and has never been checked on a
+            # real studio machine. If it is wrong, every student in the room is refused,
+            # and a message that only says "use a lab machine" tells nobody why.
+            #
+            # So the first blocked student's screen carries the answer: whoever is
+            # standing next to them can read the real name off it and put it in the
+            # lab_host_pattern setting, which is a row update and takes effect at once.
+            notice = div('Seat numbers can only be entered from a lab machine in the '
+                         'studio.').classes('queue-notice')
+            if hostname:
+                notice += span('This machine says it is ' + hostname + '.'
+                               ).classes('queue-card-seat')
+            elif address:
+                notice += span('This machine has no name we could look up.'
+                               ).classes('queue-card-seat')
+            notice += span('If you are in the studio, show this to a TA.'
+                           ).classes('queue-card-seat')
+            p += notice
         else:
             # Students sign up before they get to the lab, so a request starts with no
             # seat. Until they enter one, staff cannot see them: there is nowhere to
