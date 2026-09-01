@@ -8,13 +8,12 @@ import db as db_module
 
 @pytest.fixture
 def seeded(tmp_path, monkeypatch):
-    """A database built from the actual schema.sql + seed.sql."""
+    """A database built the way local development is: schema, competencies, samples."""
     path = tmp_path / 'seeded.db'
     connection = sqlite3.connect(path)
-    with open('schema.sql') as f:
-        connection.executescript(f.read())
-    with open('seed.sql') as f:
-        connection.executescript(f.read())
+    for name in ('schema.sql', 'competencies.sql', 'seed.sql'):
+        with open(name) as f:
+            connection.executescript(f.read())
     connection.commit()
     connection.close()
     monkeypatch.setattr(db_module, 'DB_PATH', str(path))
@@ -95,3 +94,45 @@ def test_evaluation_screen_shows_the_competency_scope(seeded):
     # The scope from the source document's sub-points.
     assert 'Hexadecimal' in body
     assert 'competency-scope' in body
+
+
+# --- the production load path (#92) -----------------------------------------
+
+def production_db(tmp_path):
+    """What a real deployment loads: schema and the real competency list. No people."""
+    path = tmp_path / 'production.db'
+    connection = sqlite3.connect(path)
+    for name in ('schema.sql', 'competencies.sql'):
+        with open(name) as f:
+            connection.executescript(f.read())
+    connection.commit()
+    return connection
+
+
+def test_the_competency_file_carries_the_real_list(tmp_path):
+    connection = production_db(tmp_path)
+    counts = dict(connection.execute(
+        "select course, count(*) from competencies group by course"))
+    assert counts == {'CPS109': 40, 'CPS213': 40}
+
+
+def test_the_competency_file_contains_no_people(tmp_path):
+    """The whole point of the split.
+
+    seed.sql mixes five invented students, their results and sample coverage pairs in
+    with the real competency list. Loading that on a real deployment would enrol
+    students who do not exist and credit TAs with evaluations they never did, and
+    nothing about it would error. Production loads this file instead.
+    """
+    connection = production_db(tmp_path)
+    for table in ('students', 'enrollments', 'achievements', 'evaluations',
+                  'attendance', 'endorsements', 'competency_covers', 'requests'):
+        n = connection.execute('select count(*) from ' + table).fetchone()[0]
+        assert n == 0, '%s is not empty in the production load path' % table
+
+
+def test_the_sample_file_still_says_it_is_samples(tmp_path):
+    """A comment is the only thing stopping somebody running the wrong file."""
+    head = open('seed.sql').read()[:400].upper()
+    assert 'LOCAL DEVELOPMENT' in head
+    assert 'NEVER LOAD THIS INTO PRODUCTION' in head

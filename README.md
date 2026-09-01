@@ -67,7 +67,8 @@ python3 -m venv venv              # create the virtualenv
 source venv/bin/activate          # activate it (every new shell)
 pip install -r requirements.txt   # install Flask
 sqlite3 course-data.db < schema.sql   # build the database structure
-sqlite3 course-data.db < seed.sql     # load sample students + competencies
+sqlite3 course-data.db < competencies.sql   # the real 80 competencies
+sqlite3 course-data.db < seed.sql           # sample students, LOCAL ONLY
 ```
 
 **Run the app** (the day-to-day command):
@@ -130,7 +131,7 @@ placeholder, so no Apache, CAS or VPN is needed. See `DEPLOYMENT.md` for the set
 
 ## Data model
 
-Schema and seed data live in `schema.sql` and `seed.sql`.
+Schema lives in `schema.sql`. The real competency list is `competencies.sql`, which production loads. `seed.sql` is sample students and results for local work only, and must never be loaded on a real deployment (#92).
 
 ```mermaid
 erDiagram
