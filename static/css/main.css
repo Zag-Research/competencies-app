@@ -554,6 +554,13 @@ ul.competency-scope li {
     border-bottom: none;
     padding: 0;
 }
+/* Keep the course tickboxes together, so the row breaks between groups rather than
+   stranding one course next to the button (#118). */
+.add-student-courses {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
 
 /* Which competencies prove others (#110). Subordinate to the name: it is a hint for
    choosing, not a second title. Shown to students so they can pick the ones worth more

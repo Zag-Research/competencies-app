@@ -28,11 +28,16 @@ def index():
         f += input(type='text', name='student_number', placeholder='Student number')
         f += input(type='text', name='first_name', placeholder='First name')
         f += input(type='text', name='last_name', placeholder='Last name')
+        # The course tickboxes wrap as one unit rather than as separate flex items
+        # (#118). Loose, they split at whatever width the row runs out at, so CPS109
+        # sat beside the name fields and CPS213 got orphaned next to the button.
+        courses = div().classes('add-student-courses')
         for course in db.all_courses(sql):
             lbl = label().classes('queue-check')
             lbl += input(type='checkbox', name='courses', value=course)
             lbl += span(course)
-            f += lbl
+            courses += lbl
+        f += courses
         f += button('Add student', type='submit').classes('roster-link')
         p += div(f).classes('add-student-wrap')
         for (number, first, last) in sql.execute(
