@@ -1,0 +1,11 @@
+-- Make the attendance line a setting instead of a constant (#108).
+--
+-- Dave set it on July 15 and said in the same breath that he did not know exactly what
+-- "most of the classes" should mean before landing on half. A number arrived at that
+-- way should be movable without cutting a release during term.
+--
+-- The row matters as much as the value. Reading it falls back to 0.5 when it is
+-- missing, so the app works either way, but an UPDATE against a row that does not exist
+-- matches nothing and reports no error. Somebody would change the line, see no
+-- complaint, and find the flag unchanged.
+insert or ignore into settings (key, value) values ('attendance_floor', '0.5');

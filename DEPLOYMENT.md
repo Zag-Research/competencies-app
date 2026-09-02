@@ -232,6 +232,7 @@ live on the next page load: no restart, no `git pull`, no reload. Handy mid-term
 | Setting | Now | What it does |
 | --- | --- | --- |
 | `daily_cap` | 3 | Competencies a student may book per session. Dave's plan is to raise this to 4 once the pace is clear. |
+| `attendance_floor` | 0.5 | The share of their own sessions a student is expected to attend. Below it, the progress page flags them. The app never deducts anything; the instructor decides what the flag is worth. Dave was unsure of this number when he set it. |
 | `studio_lookahead` | 6 | How many future sessions they can book into. About two weeks. |
 | `claim_timeout_minutes` | 20 | When an abandoned claim returns to the queue. |
 | `lab_host_pattern` | `eng\d{3}-\d+` | Which machines count as the studio lab, for seat entry. Widen it to relax the gate in an emergency. |

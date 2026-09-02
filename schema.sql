@@ -207,7 +207,7 @@ INSERT INTO settings VALUES('lab_host_pattern','eng\d{3}-\d+');
 -- file is born with everything, so this must equal the highest number in migrations/,
 -- or migrate.py would try to re-apply a change that is already here. Bump it in the
 -- same commit as any new migration; tests/test_migrations.py fails if it drifts.
-INSERT INTO settings VALUES('schema_version','3');
+INSERT INTO settings VALUES('schema_version','4');
 -- Which header mod_auth_cas publishes the student number in (see DEPLOYMENT.md). It is
 -- named <CASAttributePrefix><name>, and CASAttributePrefix is set in OUR Apache vhost,
 -- not on the CAS server, so we choose it: use CAS- (the Apache 2.4 default), never the
@@ -219,6 +219,13 @@ INSERT INTO settings VALUES('years','2026/27 2027/28 2028/29 2029/30');
 -- at 3 (students finish ~week 9), may bump to 4 later. A setting, so changing it
 -- is one row update, not a code change.
 INSERT INTO settings VALUES('daily_cap','3');
+-- The share of their own sessions a student is expected to attend before the
+-- instructor's attendance penalty applies (#108). Dave set this on July 15 and said in
+-- the same breath that he did not know exactly what "most of the classes" meant before
+-- landing on half. The app never deducts anything for it: it marks who is below the
+-- line and he decides what that is worth. A setting so the line can move mid-term
+-- without a release.
+INSERT INTO settings VALUES('attendance_floor','0.5');
 -- how many upcoming studio sessions a student can book ahead (#17). 6 is about two
 -- weeks. Raise it to let them plan further out, at the cost of a staff planning view
 -- full of bookings made before anyone knew what they would be ready for.

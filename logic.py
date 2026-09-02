@@ -383,3 +383,26 @@ def sessions_for(courses, today=None):
         weekdays = set(STUDIO_WEEKDAYS)
     days = [day for day in studio_days() if day.weekday() in weekdays]
     return sum(1 for day in days if day < today), len(days)
+
+
+# The share of their own sessions a student has to attend before the instructor's
+# attendance penalty is in play (#108). Dave set this on July 15, and said in the same
+# breath that he did not know exactly what "most of the classes" should mean before
+# landing on half. A number arrived at that way should be movable without a deploy, so
+# the real value is the `attendance_floor` setting and this is only the fallback.
+ATTENDANCE_FLOOR = 0.5
+
+
+def attendance_is_short(attended, due, floor=None):
+    """Is this student below the attendance the instructor expects? (#108)
+
+    The app never deducts anything for this. It marks who is below the line, and the
+    instructor decides what that is worth, which is how Dave described it: a penalty he
+    would apply to their remarks, not a formula.
+
+    `due` of 0 means no session has finished yet, and nobody is behind on a term that
+    has not started.
+    """
+    if not due:
+        return False
+    return attended < due * (ATTENDANCE_FLOOR if floor is None else floor)

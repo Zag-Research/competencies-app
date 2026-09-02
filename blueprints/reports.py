@@ -105,7 +105,7 @@ def progress():
         due = due_sessions(tuple(course for (course, _d, _t) in courses))
         if due:
             attend = span(str(here) + ' of ' + str(due)).classes('progress-badge')
-            if here * 2 < due:
+            if logic.attendance_is_short(here, due, db.attendance_floor()):
                 attend.addClasses('state-cooling_off')
             row += attend
         helped = thanked.get(number, 0)
