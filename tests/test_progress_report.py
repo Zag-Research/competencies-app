@@ -233,3 +233,20 @@ def test_moving_the_line_needs_no_deploy(db, monkeypatch):
 
 def test_nobody_is_short_before_the_term_starts():
     assert logic.attendance_is_short(0, 0) is False
+
+
+def test_the_two_navigation_links_are_a_matching_pair(db):
+    """A student moves between their progress page and the sign-up list constantly.
+
+    The links read "Sign up →" and "← My progress". They were "Sign up to be evaluated →"
+    and "← My progress", which is five words against two, and the page it leads to is
+    already headed "Sign up" so the long version said it twice (#115).
+    """
+    import app as app_module
+    student = app_module.app.test_client()
+    with student.session_transaction() as sess:
+        sess['user'], sess['role'] = '500111111', 'student'
+    forward = student.get('/view/500111111').get_data(as_text=True)
+    assert 'Sign up →' in forward
+    assert 'Sign up to be evaluated' not in forward
+    assert '← My progress' in student.get('/queue').get_data(as_text=True)
