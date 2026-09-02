@@ -4,6 +4,7 @@ from myhtml import *
 import db
 import logic
 from common import current_user, page_header
+from blueprints.queue_views import competency_scope
 
 mark_bp = Blueprint('mark', __name__)
 
@@ -47,6 +48,7 @@ def mark_student(student_number=None):
         # (this page does not need the dates, so recorded_at is discarded)
         states, _ = db.achievement_states(sql, student_number)
         edges = db.coverage_edges(sql)
+        descriptions = db.competency_descriptions(sql)
         # one segmented button group per competency. Tapping a button sets
         # that state and saves it (see static/js/mark.js). No Save button.
         current_course = None
@@ -78,6 +80,12 @@ def mark_student(student_number=None):
             covers = logic.covers_label(len(logic.covered_by(cid, edges)))
             if covers:
                 label_cell += div(covers).classes('queue-covers')
+            # The competency's sub-points, indented (#112). A TA marking needs to see
+            # what the competency actually covers, and the queue screens already show
+            # this; the marking page was the one place a TA saw only the name. Indented
+            # bullets read far better than the stored run-on line.
+            if descriptions.get(cid):
+                label_cell += competency_scope(descriptions[cid])
             p += div(label_cell, group).classes('mark-row')
     return str(p)
 
