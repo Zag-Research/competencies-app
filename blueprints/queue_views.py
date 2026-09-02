@@ -47,6 +47,7 @@ def queue_student_view(student_number):
             for day in studios
         }
         present_today = db.is_present(sql, student_number, today)
+        edges = db.coverage_edges(sql)
     # Seat and "a TA is coming" describe the session happening right now, so they
     # only ever read from today's requests. A booking for next Tuesday must not
     # make the student look seated and waiting today.
@@ -207,7 +208,14 @@ def queue_student_view(student_number):
                 current_course = course
             lbl = label().classes('queue-check')
             lbl += input(type='checkbox', name='competency_ids', value=str(cid))
-            lbl += span(name)
+            body = span(name)
+            # Say which ones are worth picking (#110). Demonstrating a competency
+            # credits everything it covers, and that only saves anybody time if a
+            # student can see it before choosing. Hidden, it saves time by accident.
+            covers = logic.covers_label(len(logic.covered_by(cid, edges)))
+            if covers:
+                body += span(covers).classes('queue-covers')
+            lbl += body
             f += lbl
         # The available list can be long (up to 80 competencies), so keep the submit
         # button pinned to the bottom of the screen instead of at the very end (#UX).

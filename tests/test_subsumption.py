@@ -257,3 +257,31 @@ def test_the_reply_reflects_marks_made_elsewhere(db):
     states = signed_in_as('dmason', 'staff').post(
         '/save/500111111/1/achieved').get_json()
     assert states['4'] == 'cooling_off'
+
+
+# --- saying so before the tap, not after (#110) -----------------------------
+
+def test_the_signup_list_says_which_ones_prove_others(db):
+    """Dave asked for this to save evaluation time, and it only does that if a student
+    can see which competency is worth picking. Hidden, it saves time by accident."""
+    body = signed_in_as('500111111', 'student').get('/queue').get_data(as_text=True)
+    assert 'also proves 2 others' in body      # 1 covers 2, which covers 3
+
+
+def test_the_marking_page_warns_a_ta_before_they_tap(db):
+    """One tap can change three rows. A TA who did not expect that reads it as a bug."""
+    body = signed_in_as('dmason', 'staff').get('/mark/500111111').get_data(as_text=True)
+    assert 'also proves 2 others' in body
+
+
+def test_a_competency_that_proves_nothing_says_nothing(db):
+    body = signed_in_as('dmason', 'staff').get('/mark/500111111').get_data(as_text=True)
+    # Competency 4 is unrelated, so its row carries no label.
+    row = body.split('File writing')[1][:200]
+    assert 'also proves' not in row
+
+
+def test_the_wording_is_singular_for_one():
+    assert logic.covers_label(1) == 'also proves 1 other'
+    assert logic.covers_label(2) == 'also proves 2 others'
+    assert logic.covers_label(0) is None

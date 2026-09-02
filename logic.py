@@ -406,3 +406,16 @@ def attendance_is_short(attended, due, floor=None):
     if not due:
         return False
     return attended < due * (ATTENDANCE_FLOOR if floor is None else floor)
+
+
+def covers_label(count):
+    """How to say that demonstrating this one also proves others (#110).
+
+    The coverage map only ever lived in the database. A student had no way to know that
+    one competency would earn them three, and a TA had no way to know a single tap was
+    about to change three rows. Dave asked for this to save evaluation time, and it only
+    does that if people can see which ones are worth picking.
+    """
+    if not count:
+        return None
+    return 'also proves ' + str(count) + (' other' if count == 1 else ' others')

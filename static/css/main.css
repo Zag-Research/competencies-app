@@ -486,6 +486,7 @@ ul.competency-scope li {
 .awaiting-row input {
     width: 110px;
     padding: 0.4rem 0.6rem;
+}
 
 /* Worth reading (#51): the newest three fit without scrolling and older ones are
    reachable inside the box, so the list cannot grow to push the competencies off
@@ -549,4 +550,20 @@ ul.competency-scope li {
 .add-student .queue-check {
     border-bottom: none;
     padding: 0;
+}
+
+/* Which competencies prove others (#110). Subordinate to the name: it is a hint for
+   choosing, not a second title. Shown to students so they can pick the ones worth more
+   of their seven minutes, and to TAs so one tap changing three rows is not a surprise. */
+.queue-covers {
+    display: inline-block;
+    margin-top: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: #e7f4ec;
+    /* Normal weight explicitly: .mark-label is 600 and this would inherit it, which
+       made the hint read as a second line of the competency's own name. */
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: #1a6b3c;
 }
