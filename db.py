@@ -125,6 +125,15 @@ def daily_cap():
     return int(get_setting('daily_cap', DEFAULT_DAILY_CAP))
 
 
+def attendance_floor():
+    """The share of their sessions a student is expected to attend (#108).
+
+    Dave's number, and he said outright he was unsure of it. A setting so that moving it
+    mid-term is a row update rather than a release cut during teaching.
+    """
+    return float(get_setting('attendance_floor', logic.ATTENDANCE_FLOOR))
+
+
 # How many upcoming studio sessions a student can book ahead (#17). Six is about two
 # weeks. Longer lets them plan further out; shorter keeps the staff planning view
 # honest, since a booking made a month early is a guess rather than a plan. Dave's call,

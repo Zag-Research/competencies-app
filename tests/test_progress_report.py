@@ -198,3 +198,38 @@ def test_turning_up_on_the_first_morning_is_not_one_of_zero(db, monkeypatch):
                     " values ('500111111', '2026-09-08')")
     alice = badges_for(staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
     assert 'of 0' not in alice
+
+
+# --- the attendance line is a setting, not a constant (#108) ----------------
+
+def test_the_attendance_line_is_where_dave_set_it(db, monkeypatch):
+    """Half, which is what he said on July 15. Shipping his number, not a new one."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
+    with db_module.cursor() as sql:
+        for day in ('2026-09-08', '2026-09-09', '2026-09-10', '2026-09-15', '2026-09-16'):
+            sql.execute("insert into attendance (student_number, day) values"
+                        " ('500111111', ?)", (day,))
+    # 5 of the 11 finished sessions, so just under half.
+    assert 'state-cooling_off' in badges_for(
+        staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
+
+
+def test_moving_the_line_needs_no_deploy(db, monkeypatch):
+    """Dave was unsure of the number when he set it, and may want it lower mid-term.
+
+    A row update has to be enough. It was hardcoded as `here * 2 < due`, so softening it
+    would have meant cutting a release during teaching.
+    """
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 1))
+    with db_module.cursor() as sql:
+        for day in ('2026-09-08', '2026-09-09', '2026-09-10', '2026-09-15', '2026-09-16'):
+            sql.execute("insert into attendance (student_number, day) values"
+                        " ('500111111', ?)", (day,))
+        sql.execute("update settings set value = '0.4' where key = 'attendance_floor'")
+    # 5 of 11 clears a 40% line, so the same student is no longer flagged.
+    assert 'state-cooling_off' not in badges_for(
+        staff().get('/progress').get_data(as_text=True), 'Chen, Alice')
+
+
+def test_nobody_is_short_before_the_term_starts():
+    assert logic.attendance_is_short(0, 0) is False
