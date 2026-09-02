@@ -102,9 +102,11 @@ def view_student(student_number=None):
         # Staff reach the roster from the header nav now; a student gets a sign-up link.
         nav = div().classes('subnav')
         if cur_role == 'student' and cur_user == student_number:
-            # Short, to match '← My progress' going the other way, and because the
-            # page it leads to is already headed 'Sign up' (#115).
-            nav += a('Sign up →', href=url_for('queue.queue'))
+            # "Sign up" on its own reads as creating an account, which is the wrong
+            # idea entirely: this is booking an evaluation slot. Shortened to that once
+            # (#115) and put back, because the ambiguity costs more than the four extra
+            # words save.
+            nav += a('Sign up to be evaluated →', href=url_for('queue.queue'))
         p += nav
         states, recorded_at = db.achievement_states(sql, student_number)
         # Competencies currently in the queue, so the progress page can show "in the
