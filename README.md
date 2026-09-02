@@ -24,10 +24,25 @@ moving.
   session instead of being lost or counted as a fail.
 - **Studio sessions with book-ahead.** The studio meets Tuesday, Wednesday, and
   Thursday. A student can sign up for today's session or book a future one.
-- **Pace against the studio.** A student's progress page opens with two bars: how much
-  of their competency list is done, and how much of the studio has happened. Sessions,
-  not calendar days, so reading week cannot make anyone look behind. The wording is a
-  nudge in both directions, never a failure.
+- **Pace against the studio.** A student's progress page opens with one bar: how much
+  of their competency list is done, with a marker showing how much of the studio has
+  happened. Sessions, not calendar days, so reading week cannot make anyone look
+  behind. The wording is a nudge in both directions, never a failure.
+- **One evaluation covering several.** Some competencies prove others: a student who
+  writes a conditional with multiple conditions has shown they understand simple ones.
+  Marking the harder one credits everything it covers, following the chain, and an undo
+  takes those credits back. Both the sign-up list and the marking page say **"also
+  proves 2 others"** before you tap, because it only saves anybody time if people can
+  see which ones are worth picking.
+- **Everyone on one page.** A staff **Progress** page lists every student per course,
+  furthest behind first, with sessions attended and shout-outs received. Two courses
+  are graded separately, so it never blends them into one misleading percentage.
+- **Catching up after a missed week.** A student who misses sessions gets those slots
+  back the following week, so the per-session cap stops being a punishment for being
+  ill. It is a rolling week, not a bank, so nobody can save up all term.
+- **Attendance measured against their own sessions.** CPS109 meets Tuesday and
+  Thursday, CPS213 Tuesday and Wednesday. A student in one course only is measured
+  against the sessions they were actually due at, not the whole studio.
 - **Who evaluated whom.** Every evaluation records the TA who did it, and a staff page
   shows the counts. A student who fails on Tuesday and passes on Thursday counts for
   both TAs, because both did the work.
@@ -45,7 +60,7 @@ moving.
 
 ## How I know it works
 
-- **181 automated tests** covering the queue, sign-up rules, attendance, shout-outs,
+- **291 automated tests** covering the queue, sign-up rules, attendance, shout-outs,
   enrollment, the pace maths, evaluator tracking, the lab check and schema migrations.
   They run in about two seconds (`python -m pytest tests/`).
 - The tests aim at the parts that actually break: two TAs claiming the same student at
@@ -54,9 +69,13 @@ moving.
 - **Every change goes through a pull request before it is merged**, with the reasoning
   for each decision written in the description.
 - Worth being honest about the limit: tests are written by the person who built the
-  thing, so they share that person's blind spots. The two worst problems found so far,
-  a student identity bug and a config that would have locked every TA out, were both
-  caught by asking "what happens on day one" rather than by any test.
+  thing, so they share that person's blind spots. Almost every serious problem found so
+  far was caught by using the app or asking "what happens on day one", not by a test:
+  a student identity bug, a config that would have locked every TA out, a seat that was
+  silently discarded so no TA could see the student, and a stylesheet rule left unclosed
+  so eight rules below it never applied. There is now a script that drives the real
+  routes end to end, the way a student and a TA actually click them, because unit tests
+  that call the functions directly never crossed that boundary.
 
 ## Quick start
 
@@ -111,7 +130,8 @@ each file has one clear job:
 |------|----------------|
 | `app.py` | `create_app()` app factory: builds the app and registers the blueprints. |
 | `blueprints/auth.py` | sign in / sign out. |
-| `blueprints/main.py` | roster home and student progress pages. |
+| `blueprints/main.py` | roster home, student progress page, peer shout-outs, the reading list, and the evaluator report. More than its name suggests (#74). |
+| `blueprints/reports.py` | the staff Progress page: everyone at once, per course. |
 | `blueprints/mark.py` | staff marking page and per-tap save. |
 | `blueprints/queue.py` | the evaluation queue routes (sign-up + staff marking). |
 | `blueprints/queue_views.py` | builds the queue's pages (student view, staff queue, evaluation screen). |
@@ -144,6 +164,7 @@ erDiagram
     students ||--o{ endorsements : "gives / gets"
     students ||--o{ evaluations : "was evaluated in"
     competencies ||--o{ evaluations : "evaluated"
+    competencies ||--o{ competency_covers : "proves"
     students ||--o{ link_clicks : "opened"
     links ||--o{ link_clicks : "opened by"
     students {
@@ -156,6 +177,10 @@ erDiagram
         TEXT name
         TEXT description
         TEXT course
+    }
+    competency_covers {
+        INTEGER competency_id FK
+        INTEGER covers_id FK
     }
     achievements {
         TEXT student_number FK
@@ -180,6 +205,7 @@ erDiagram
     attendance {
         TEXT student_number FK
         TEXT day
+        TEXT seat
     }
     endorsements {
         TEXT from_student FK
