@@ -187,7 +187,12 @@ def queue_student_view(student_number):
             text = logic.studio_label(day)
             if day == today:
                 text += ' (today)'
-            text += ' - ' + str(remaining[day]) + ' of ' + str(db.daily_cap()) + ' left'
+            # Against THIS student's cap, not the base one (#106). A student who
+            # missed sessions last week gets extra slots, and remaining[] already
+            # counts against the raised number, so pairing it with the base cap
+            # read "12 of 3 left" on the one screen where the extra slots are the
+            # whole point.
+            text += ' - ' + str(remaining[day]) + ' of ' + str(cap) + ' left'
             o = option(text, value=day)
             if day == bookable[0]:
                 o.addAttributes(selected=True)
@@ -209,7 +214,8 @@ def queue_student_view(student_number):
         f += div(button('Sign up', type='submit').classes('roster-link')).classes('queue-signup-bar')
         p += f
     elif available and not bookable:
-        p += div('Every upcoming studio session is full for you (' + str(db.daily_cap())
+        # Their cap, not the base one, for the same reason as the picker above (#106).
+        p += div('Every upcoming studio session is full for you (' + str(cap)
                  + ' competencies each). Come back after your next session.'
                  ).classes('queue-empty')
     elif not pending:

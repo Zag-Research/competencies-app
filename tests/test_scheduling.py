@@ -284,3 +284,36 @@ def test_the_balance_rule_still_applies_at_the_higher_cap():
     """Catching up must not mean bingeing one course."""
     assert logic.session_signup_ok({'CPS109': 12, 'CPS213': 0}, 12) is False
     assert logic.session_signup_ok({'CPS109': 6, 'CPS213': 6}, 12) is True
+
+
+# --- the cap a student is shown is their own (#106) -------------------------
+
+MID_TERM = date(2026, 10, 6)          # a Tuesday in week five
+
+
+def test_the_session_picker_counts_against_the_students_own_cap(db, monkeypatch):
+    """A student who missed last week gets extra slots (#70).
+
+    The picker paired the remaining count, which already uses the raised cap, against
+    the base one. So it read "12 of 3 left" on the one screen where those extra slots
+    are the entire point.
+    """
+    monkeypatch.setattr(logic, 'today_toronto', lambda: MID_TERM)
+    student = signed_in_as('500111111', 'student')
+
+    # Missed the last three sessions, so the cap is raised.
+    body = student.get('/queue').get_data(as_text=True)
+    assert 'of 12 left' in body
+    assert 'of 3 left' not in body
+    assert 'Higher than usual' in body
+
+
+def test_a_student_who_came_every_session_sees_the_ordinary_cap(db, monkeypatch):
+    monkeypatch.setattr(logic, 'today_toronto', lambda: MID_TERM)
+    with db_module.cursor() as sql:
+        for day in ('2026-09-29', '2026-09-30', '2026-10-01'):
+            sql.execute("insert into attendance (student_number, day)"
+                        " values ('500111111', ?)", (day,))
+    body = signed_in_as('500111111', 'student').get('/queue').get_data(as_text=True)
+    assert 'of 3 left' in body
+    assert 'Higher than usual' not in body
