@@ -8,6 +8,7 @@ says they are (#90).
 from flask import Blueprint, request, url_for, session, redirect, current_app
 from myhtml import *
 import common
+from common import current_user
 import db
 
 auth_bp = Blueprint('auth', __name__)
@@ -73,6 +74,11 @@ def login():
     # In production CAS has already authenticated whoever reaches this, so there is
     # nothing to sign into. Landing here means the app did not recognise them.
     if current_app.config.get('ENV') == 'production':
+        # Somebody the app already knows has no business on this page: it exists to tell
+        # an unrecognised person what CAS called them. Showing a valid user "you are not
+        # on a list" is alarming and false, so send them home instead (#121).
+        if current_user()[0]:
+            return redirect(url_for('main.index'))
         return not_recognised_page()
     error = None
     if request.method == 'POST':

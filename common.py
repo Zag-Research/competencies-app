@@ -120,8 +120,19 @@ def page_header():
     header += a('Competency Tracker', href=url_for('main.index')).classes('site-title')
     user, role = current_user()
     if user:
-        header += span('Signed in as ' + user + ' (' + role + ')').classes('whoami')
-        header += a('Switch user', href=url_for('auth.login')).classes('back-link')
+        # A round initial, the name, then the role as a small pill. It was one run of
+        # text reading "Signed in as dmason (staff)", which is four words of scaffolding
+        # around two pieces of information (#121).
+        who = div().classes('whoami')
+        who += span(user[0].upper()).classes('whoami-avatar')
+        who += span(user).classes('whoami-name')
+        who += span(role).classes('whoami-role')
+        header += who
+        # Development only. Under CAS there is nothing to switch to: identity comes from
+        # the headers, and the link would land on a page telling a perfectly valid user
+        # they are not on any list.
+        if current_app.config.get('ENV') != 'production':
+            header += a('Switch user', href=url_for('auth.login')).classes('back-link')
     if role == 'staff':
         # A second row of nav links, below the sign-in info, so every staff view is
         # reachable from anywhere without crowding the identity row.

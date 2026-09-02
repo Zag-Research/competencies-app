@@ -217,10 +217,12 @@ def test_it_says_whether_the_student_number_attribute_arrived(db, monkeypatch):
     assert 'not sent' in missing
     assert 'not releasing attributes' in missing
 
+    # A number nobody has: the roster has not been loaded, or this student is not on it.
+    # A recognised student would be sent home instead, which is the point of the page.
     arrived = client.get('/login', headers={'Cas-User': 'someone',
-                                            'CAS-studentnumber': '500111111'}
+                                            'CAS-studentnumber': '500999999'}
                          ).get_data(as_text=True)
-    assert '500111111' in arrived
+    assert '500999999' in arrived
     assert 'not releasing attributes' not in arrived
 
 
@@ -271,3 +273,37 @@ def test_the_stylesheet_has_no_unclosed_rules(db):
         'unbalanced braces in main.css: %d open, %d close. Everything after the '
         'unclosed rule is being ignored by the browser.'
         % (css.count('{'), css.count('}')))
+
+
+def test_a_recognised_person_is_sent_home_not_told_they_are_unknown(db, monkeypatch):
+    """The page exists to tell an unrecognised person what CAS called them.
+
+    A valid user reaching it, by clicking a stale link or a bookmark, was shown "you are
+    signed in, but not on a list", which is alarming and false (#121).
+    """
+    landed = production(monkeypatch).get('/login', headers={'Cas-User': 'dmason'})
+    assert landed.status_code in (301, 302)
+    assert landed.headers['Location'].endswith('/')
+
+
+def test_switch_user_is_not_offered_in_production(db, monkeypatch):
+    """Under CAS there is nothing to switch to: identity comes from the headers, and the
+    link would land on a page telling a valid user they are not on any list."""
+    body = production(monkeypatch).get('/queue', headers={'Cas-User': 'dmason'}
+                                       ).get_data(as_text=True)
+    assert 'Switch user' not in body
+
+
+def test_switch_user_is_still_there_in_development(db):
+    body = client_as('dmason', 'staff').get('/queue').get_data(as_text=True)
+    assert 'Switch user' in body
+
+
+def test_the_identity_block_is_not_a_sentence(db):
+    """It read "Signed in as dmason (staff)": four words of scaffolding around two
+    pieces of information. Now an initial, the name, and the role as a pill (#121)."""
+    body = client_as('dmason', 'staff').get('/queue').get_data(as_text=True)
+    assert 'Signed in as' not in body
+    assert 'whoami-avatar' in body and '>D<' in body     # the initial
+    assert 'whoami-name' in body and 'dmason' in body
+    assert 'whoami-role' in body
