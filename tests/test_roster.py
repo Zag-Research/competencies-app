@@ -328,3 +328,16 @@ def test_nobody_is_reported_when_everyone_takes_both(db, tmp_path):
         assert import_roster.single_course_students(connection) == []
     finally:
         connection.close()
+
+
+def test_the_course_tickboxes_stay_together(db):
+    """Loose in the form they wrapped as separate items, so CPS109 sat beside the name
+    fields and CPS213 was orphaned next to the button (#118). Grouped, the row breaks
+    between groups instead of through the middle of one."""
+    import app as app_module
+    client = app_module.app.test_client()
+    with client.session_transaction() as s:
+        s['user'], s['role'] = 'dmason', 'staff'
+    body = client.get('/').get_data(as_text=True)
+    group = body.split('add-student-courses')[1].split('</div>')[0]
+    assert 'CPS109' in group and 'CPS213' in group
