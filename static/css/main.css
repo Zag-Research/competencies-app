@@ -385,6 +385,9 @@ h1 {
     margin-top: 0.2rem;
     max-width: 46rem;
     color: #5f6571;
+    /* Normal weight explicitly: on the marking page the parent .mark-label is 600, and
+       inheriting it made the sub-points compete with the competency's own name (#112). */
+    font-weight: 400;
     font-size: 0.85rem;
     line-height: 1.35;
 }

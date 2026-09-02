@@ -539,6 +539,17 @@ def competencies_for(sql, student_number):
     ).fetchall()
 
 
+def competency_descriptions(sql):
+    """{competency_id: description} for the ones that have sub-points (#112).
+
+    Kept separate from competencies_for rather than widening its rows, because three
+    callers unpack those as (id, name, course) and only the marking page needs this.
+    """
+    return {cid: desc for (cid, desc) in sql.execute(
+        "select id, description from competencies"
+        " where description is not null and description != ''")}
+
+
 def achieved_competency_ids(sql, student_number):
     """The set of competency ids this student has already passed (status 'achieved').
 

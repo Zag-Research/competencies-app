@@ -136,3 +136,28 @@ def test_the_sample_file_still_says_it_is_samples(tmp_path):
     head = open('seed.sql').read()[:400].upper()
     assert 'LOCAL DEVELOPMENT' in head
     assert 'NEVER LOAD THIS INTO PRODUCTION' in head
+
+
+def test_the_marking_page_shows_what_a_competency_covers(seeded):
+    """A TA marking saw only the name. The queue screens already showed the sub-points;
+    the marking page, where the judgement is actually recorded, did not (#112).
+    """
+    import app as app_module
+    client = app_module.app.test_client()
+    with client.session_transaction() as s:
+        s['user'], s['role'] = 'dmason', 'staff'
+    body = client.get('/mark/500111111').get_data(as_text=True)
+    assert 'competency-scope' in body
+    assert 'Uses an if statement for conditional commands' in body
+
+
+def test_a_competency_with_no_sub_points_adds_no_empty_list(seeded):
+    """32 of the 80 have no description yet, and an empty bullet list under a name
+    would be worse than nothing."""
+    import app as app_module
+    client = app_module.app.test_client()
+    with client.session_transaction() as s:
+        s['user'], s['role'] = 'dmason', 'staff'
+    body = client.get('/mark/500111111').get_data(as_text=True)
+    row = body.split('Uses variables with meaningful naming conventions')[1][:300]
+    assert 'competency-scope' not in row
