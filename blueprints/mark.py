@@ -1,5 +1,5 @@
 """The staff marking page and its per-tap save endpoint."""
-from flask import Blueprint, url_for, redirect
+from flask import Blueprint, url_for, redirect, jsonify
 from myhtml import *
 import db
 from common import current_user, page_header
@@ -95,4 +95,15 @@ def save_mark(student_number, competency_id, new_state):
             db.clear_achievement(sql, student_number, competency_id)
         else:
             db.record_achievement(sql, student_number, competency_id, new_state, user)
-    return ''
+        # Every result for this student, not just the one tapped (#104).
+        #
+        # One tap can change several rows: passing a competency credits everything it
+        # covers, and undoing it takes those credits back (#80). The page used to move
+        # the highlight only inside the group that was clicked, so the credited ones
+        # stayed reading "Not assessed" until somebody happened to reload. The feature
+        # worked and was invisible, which is worse than not having it.
+        #
+        # Returning the whole map rather than a diff keeps the page correct even when
+        # somebody else marked this student in another tab a moment ago.
+        states, _recorded = db.achievement_states(sql, student_number)
+    return jsonify({str(cid): status for cid, status in states.items()})
