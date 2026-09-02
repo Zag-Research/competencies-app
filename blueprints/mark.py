@@ -2,6 +2,7 @@
 from flask import Blueprint, url_for, redirect, jsonify
 from myhtml import *
 import db
+import logic
 from common import current_user, page_header
 
 mark_bp = Blueprint('mark', __name__)
@@ -45,6 +46,7 @@ def mark_student(student_number=None):
         # current recorded state per competency: competency_id -> status
         # (this page does not need the dates, so recorded_at is discarded)
         states, _ = db.achievement_states(sql, student_number)
+        edges = db.coverage_edges(sql)
         # one segmented button group per competency. Tapping a button sets
         # that state and saves it (see static/js/mark.js). No Save button.
         current_course = None
@@ -70,7 +72,13 @@ def mark_student(student_number=None):
                     b.addClasses('is-active')
                 b.addAttributes(aria_pressed='true' if active else 'false')
                 group += b
-            p += div(div(name).classes('mark-label'), group).classes('mark-row')
+            # Warn before the tap, not after (#110). One tap here can change three
+            # rows, and a TA who did not expect that reads it as a bug.
+            label_cell = div(name).classes('mark-label')
+            covers = logic.covers_label(len(logic.covered_by(cid, edges)))
+            if covers:
+                label_cell += div(covers).classes('queue-covers')
+            p += div(label_cell, group).classes('mark-row')
     return str(p)
 
 

@@ -255,3 +255,19 @@ def test_the_tab_says_what_the_app_is(db):
     """It said "Computer Science Admin", inherited from the template myhtml came from."""
     body = client_as('dmason', 'staff').get('/queue').get_data(as_text=True)
     assert '<title>Competency Tracker</title>' in body
+
+
+def test_the_stylesheet_has_no_unclosed_rules(db):
+    """An unclosed rule makes the CSS parser swallow everything after it, silently.
+
+    `.awaiting-row input` was missing its brace, so eight rules below it never applied:
+    the whole reading list, add-a-student, and the coverage hint. Nothing errors, no
+    page looks broken enough to notice, and the styles are simply absent.
+    """
+    import re
+    css = open('static/css/main.css').read()
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    assert css.count('{') == css.count('}'), (
+        'unbalanced braces in main.css: %d open, %d close. Everything after the '
+        'unclosed rule is being ignored by the browser.'
+        % (css.count('{'), css.count('}')))
