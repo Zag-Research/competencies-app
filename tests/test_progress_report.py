@@ -248,3 +248,45 @@ def test_the_signup_link_says_what_it_is_for(db):
     forward = student.get('/view/500111111').get_data(as_text=True)
     assert 'Sign up to be evaluated →' in forward
     assert '← My progress' in student.get('/queue').get_data(as_text=True)
+
+
+# --- colour says whether the number is good for the week (#125) --------------
+
+def badge_colours(body, surname):
+    import re
+    chunk = body.split(surname)[1].split('progress-row')[0]
+    return re.findall(r'<span style="background: (#[0-9a-f]{6})" class="progress-badge">', chunk)
+
+
+def test_the_number_and_the_colour_say_different_things(db, monkeypatch):
+    """Dave's proposal on Sept 2. The number is how much of the course they have done;
+    the colour is whether that is good for this point in the term. 22% means nothing
+    until you know what week it is, and his use for this page is spotting who to talk to.
+    """
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 6))
+    passed('500111111', 1)                      # 1 of 2 in CPS109, none in CPS213
+    body = staff().get('/progress').get_data(as_text=True)
+    ahead, behind = badge_colours(body, 'Chen, Alice')
+    assert ahead != behind                      # same student, two very different weeks
+    # The number is untouched: still the share of the course's marks the competencies
+    # are worth, which is 1 of 2 competencies at 80% between them.
+    assert 'CPS109 40%' in body
+
+
+def test_every_badge_is_pale_enough_to_read_dark_text_on(db, monkeypatch):
+    """Dave asked for a light red to light green range here rather than the bar's
+    saturated colours, because a badge is a background behind dark text."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 6))
+    body = staff().get('/progress').get_data(as_text=True)
+    for colour in badge_colours(body, 'Chen, Alice'):
+        rgb = [int(colour[i:i + 2], 16) for i in (1, 3, 5)]
+        assert min(rgb) > 200, colour           # nothing dark enough to swallow text
+
+
+def test_before_term_the_badges_keep_their_old_states(db, monkeypatch):
+    """No sessions have run, so there is nothing to be behind and no colour to show.
+    The page falls back to the achieved and unassessed classes it used before."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 9, 1))
+    body = staff().get('/progress').get_data(as_text=True)
+    assert 'background: #' not in body
+    assert 'state-unassessed' in body

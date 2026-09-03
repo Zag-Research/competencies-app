@@ -273,6 +273,16 @@ PACE_COLOURS = [
 ]
 PACE_AHEAD_COLOUR = (26, 95, 180)   # blue, past 100% of expected
 
+# The same ramp, pale, for the progress page badges (#125). Dave asked there for a
+# light red to light green range rather than the bar's saturated colours, because a
+# badge is a background behind dark text and the strong version is unreadable.
+PACE_TINTS = [
+    (0.0, (250, 226, 223)),
+    (0.5, (253, 243, 213)),
+    (1.0, (226, 242, 231)),
+]
+PACE_AHEAD_TINT = (226, 236, 249)
+
 
 def pace_ratio(done_pct, term_pct):
     """How far along they are against how far along they should be (#124).
@@ -293,22 +303,32 @@ def pace_colour(done_pct, term_pct):
     states: a student at 49% of expected and one at 51% are not meaningfully different
     and should not look it.
     """
-    ratio = pace_ratio(done_pct, term_pct)
+    return _ramp(pace_ratio(done_pct, term_pct), PACE_COLOURS, PACE_AHEAD_COLOUR)
+
+
+def pace_tint(done_pct, term_pct):
+    """The pale version, for a badge sitting behind dark text (#125)."""
+    return _ramp(pace_ratio(done_pct, term_pct), PACE_TINTS, PACE_AHEAD_TINT)
+
+
+def _ramp(ratio, stops, above):
+    """Interpolate between `stops` on `ratio`, or `above` once past the last stop."""
     if ratio is None:
         return None
-    # Strictly greater: keeping pace exactly is green, and blue is for genuinely ahead.
-    if ratio > 1.0:
-        return '#%02x%02x%02x' % PACE_AHEAD_COLOUR
-    for i in range(len(PACE_COLOURS) - 1):
-        low, low_rgb = PACE_COLOURS[i]
-        high, high_rgb = PACE_COLOURS[i + 1]
+    # Strictly greater: keeping pace exactly is the last stop, and the `above` colour
+    # is for genuinely ahead.
+    if ratio > stops[-1][0]:
+        return '#%02x%02x%02x' % above
+    for i in range(len(stops) - 1):
+        low, low_rgb = stops[i]
+        high, high_rgb = stops[i + 1]
         if low <= ratio <= high:
             span = high - low
             weight = (ratio - low) / span if span else 0
             rgb = tuple(round(a + (b - a) * weight)
                         for a, b in zip(low_rgb, high_rgb))
             return '#%02x%02x%02x' % rgb
-    return '#%02x%02x%02x' % PACE_COLOURS[0][1]
+    return '#%02x%02x%02x' % stops[0][1]
 
 
 def pace_explanation(achieved, total, elapsed, sessions):

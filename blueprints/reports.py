@@ -22,6 +22,23 @@ reports_bp = Blueprint('reports', __name__)
 COMPETENCIES_ARE_WORTH = 80
 
 
+def _term_share_cache():
+    """How far through the term a student taking `courses` is, as a percentage.
+
+    Separate from the sessions-attended count below because it answers a different
+    question: that one is how many sessions they turned up to, this one is how much of
+    their term has happened. Same per-request caching, for the same reason.
+    """
+    cache = {}
+
+    def share(courses):
+        if courses not in cache:
+            done, total = logic.sessions_for(courses)
+            cache[courses] = logic.percent(done, total)
+        return cache[courses]
+    return share
+
+
 def _due_sessions_cache():
     """sessions_for is the same answer for every student taking the same courses.
 
@@ -85,15 +102,26 @@ def progress():
 
     rows.sort(key=lambda r: (r[0], r[1]) if order == 'name' else (overall(r), r[0]))
 
+    term_share = _term_share_cache()
     due_sessions = _due_sessions_cache()
     for (last, first, number, courses) in rows:
         row = div().classes('progress-row')
         row += span(last + ', ' + first).classes('progress-name')
+        # How far through their own term this student is, for the badge colours below.
+        expected = term_share(tuple(course for (course, _d, _t) in courses))
         for (course, done, total) in courses:
             share = logic.percent(done * COMPETENCIES_ARE_WORTH, total * 100) if total else 0
-            row += span(course + ' ' + str(share) + '%'
-                        ).classes('progress-badge').addClasses(
-                            'state-achieved' if done else 'state-unassessed')
+            badge = span(course + ' ' + str(share) + '%').classes('progress-badge')
+            # Number and colour say different things on purpose (#125). The number is
+            # how much of the course they have done; the colour is whether that is
+            # good for this point in the term. Dave's use for the page is spotting who
+            # to talk to, and 22% means nothing until you know what week it is.
+            tint = logic.pace_tint(logic.percent(done, total), expected)
+            if tint:
+                badge.addAttributes(style='background: ' + tint)
+            else:
+                badge.addClasses('state-achieved' if done else 'state-unassessed')
+            row += badge
         # The two things that feed Dave's remarks, next to the competencies rather than
         # folded into them, because how they count is his call not the app's.
         here = attended.get(number, 0)
