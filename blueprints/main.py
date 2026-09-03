@@ -384,7 +384,7 @@ def evaluators():
     p = page()
     p += page_header()
     p += h1('Evaluations by evaluator')
-    p += div('Passed and not passed count the same.').classes('subnav')
+    p += div('Passed and deferred count the same.').classes('subnav')
     with db.cursor() as sql:
         total = db.evaluator_counts(sql)
         recent = db.evaluator_counts(sql, since=logic.days_ago(7))

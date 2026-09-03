@@ -392,7 +392,7 @@ def test_evaluation_screen_offers_all_three_actions(db, staff):
         db.claim_student(sql, '500111111', 'dmason', STUDIO)
     body = staff.get('/queue/student/500111111').get_data(as_text=True)
     assert 'Achieved' in body
-    assert 'Not passed' in body
+    assert 'Deferred' in body
     # The apostrophe is escaped in the rendered label, so match on the action
     # instead: that is what the button actually does.
     assert '/queue/decline/' in body
@@ -486,3 +486,37 @@ def test_declining_from_a_cohort_still_hands_back_only_that_one(db, staff):
             'select status, bumped_by from requests where id = ?', (mine,)).fetchone()
     assert handed_back == ('waiting', 'dmason')
     assert request_row(theirs)[0] == 'claimed'
+
+
+def test_the_middle_outcome_is_called_deferred_everywhere(db, staff):
+    """Dave asked for this on Sept 2: it is a two day wait, not a failure, and
+    "Not passed" made it sound like one (#126).
+
+    All four places, because the wording had already drifted between the marking page
+    and the queue once before.
+    """
+    add_request('500111111', 1)
+    with db.cursor() as sql:
+        db.claim_student(sql, '500111111', 'dmason', STUDIO)
+        rid = sql.execute("select id from requests where student_number = '500111111'"
+                          ).fetchone()[0]
+    for page in ('/queue/student/500111111', '/queue', '/mark/500111111'):
+        body = staff.get(page).get_data(as_text=True)
+        assert 'Not passed' not in body, page
+    staff.post('/queue/mark/%d/cooling_off' % rid)          # no follow, keeps the banner
+    banner = staff.get('/queue/student/500111111').get_data(as_text=True)
+    assert 'Deferred' in banner and 'Not passed' not in banner
+
+
+def test_the_student_still_sees_the_kinder_wording(db):
+    """Students never saw "Not passed" and should not now see "Deferred" either: their
+    view says when they can try again, which is the useful thing."""
+    import app as app_module
+    client = app_module.app.test_client()
+    with client.session_transaction() as s:
+        s['user'], s['role'] = '500111111', 'student'
+    with db_module.cursor() as sql:
+        db_module.record_achievement(sql, '500111111', 1, 'cooling_off', 'dmason')
+    body = client.get('/view/500111111').get_data(as_text=True)
+    assert 'Available to retry' in body
+    assert 'Deferred' not in body

@@ -474,7 +474,7 @@ def queue_cohort_view(competency_id, evaluator):
     if notice:
         p += div(notice).classes('queue-notice')
     if undo_row:
-        outcome = 'Achieved' if undo['state'] == 'achieved' else 'Not passed'
+        outcome = 'Achieved' if undo['state'] == 'achieved' else logic.DEFER_LABEL
         banner = div().classes('queue-notice')
         banner += span('Marked ' + undo_row[0] + ' ' + undo_row[1]
                        + ' as ' + outcome + '.')
@@ -499,7 +499,7 @@ def queue_cohort_view(competency_id, evaluator):
                            back='competency')
         )
         actions += form(
-            button('Not passed', type='submit').classes('roster-link', 'queue-no'),
+            button(logic.DEFER_LABEL, type='submit').classes('roster-link', 'queue-no'),
             method='post',
             action=url_for('queue.queue_mark', request_id=rid, state='cooling_off',
                            back='competency')
@@ -578,7 +578,7 @@ def queue_evaluate_view(student_number, evaluator):
     if notice:
         p += div(notice).classes('queue-notice')
     if undo_row:
-        outcome = 'Achieved' if undo['state'] == 'achieved' else 'Not passed'
+        outcome = 'Achieved' if undo['state'] == 'achieved' else logic.DEFER_LABEL
         banner = div().classes('queue-notice')
         banner += span('Marked ' + undo_row[0] + ' as ' + outcome + '.')
         banner += form(
@@ -604,7 +604,7 @@ def queue_evaluate_view(student_number, evaluator):
             action=url_for('queue.queue_mark', request_id=rid, state='achieved')
         )
         actions += form(
-            button('Not passed', type='submit').classes('roster-link', 'queue-no'),
+            button(logic.DEFER_LABEL, type='submit').classes('roster-link', 'queue-no'),
             method='post',
             action=url_for('queue.queue_mark', request_id=rid, state='cooling_off')
         )
