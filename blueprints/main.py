@@ -314,8 +314,9 @@ def links():
         p += row
         if why:
             p += div(why).classes('link-why')
-    # The list that makes the click tracking worth having: Dave wanted it "per student
-    # so we can encourage students to stay engaged", and this is who to encourage.
+    # The list that makes the click tracking worth having. Dave asked for clicks
+    # tracked per student so that students who are drifting can be encouraged, and
+    # this is the list of who to encourage.
     if rows:
         p += h2('Has not opened anything')
         if not unread:
