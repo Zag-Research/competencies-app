@@ -317,3 +317,58 @@ def test_a_student_who_came_every_session_sees_the_ordinary_cap(db, monkeypatch)
     body = signed_in_as('500111111', 'student').get('/queue').get_data(as_text=True)
     assert 'of 3 left' in body
     assert 'Higher than usual' not in body
+
+
+# --- cancelling must not buy extra slots (#123) -----------------------------
+
+def booked_courses(student='500111111', day=None):
+    with db_module.cursor() as sql:
+        rows = sql.execute(
+            "select c.course from requests r join competencies c on c.id = r.competency_id"
+            " where r.student_number = ? and r.studio_date = ?", (student, day or TUE))
+        counts = {}
+        for (course,) in rows:
+            counts[course] = counts.get(course, 0) + 1
+    return counts
+
+
+def test_cancelling_and_rebooking_does_not_raise_the_cap(db, monkeypatch):
+    """Raised in a meeting: can a student cancel their way past the per-session limit?
+
+    No. The cap counts every request booked for that session, handled or not, so a
+    cancellation hands back a slot the student had not spent. There is no way to cancel
+    something already evaluated, so a spent slot stays spent.
+    """
+    monkeypatch.setattr(logic, 'upcoming_studios', lambda *a, **k: [TUE])
+    student = signed_in_as('500111111', 'student')
+    student.post('/queue/join', data={'competency_ids': ['1', '2'], 'studio_date': TUE})
+    with db_module.cursor() as sql:
+        first = sql.execute("select id from requests where student_number = '500111111'"
+                            " order by id limit 1").fetchone()[0]
+        used_before = db_module.requests_used_for_studio(sql, '500111111', TUE)
+    student.post('/queue/cancel/%d' % first)
+    with db_module.cursor() as sql:
+        used_after = db_module.requests_used_for_studio(sql, '500111111', TUE)
+    assert used_after == used_before - 1        # the freed slot, not a bonus one
+
+
+def test_cancelling_cannot_unbalance_the_two_courses(db, monkeypatch):
+    """The sharper version of the same attack.
+
+    Book two of one course and one of the other, cancel the lone one, then try to add a
+    third of the first. That would leave 3 and 0, which the balance rule exists to stop,
+    and it has to notice on the second booking rather than only on the first.
+    """
+    monkeypatch.setattr(logic, 'upcoming_studios', lambda *a, **k: [TUE])
+    with db_module.cursor() as sql:
+        sql.execute("insert into competencies (id, name, course) values (3, 'C3', 'CPS109')")
+        sql.execute("update competencies set course = 'CPS109' where id in (1, 2)")
+        sql.execute("insert into competencies (id, name, course) values (4, 'C4', 'CPS213')")
+    student = signed_in_as('500111111', 'student')
+    student.post('/queue/join', data={'competency_ids': ['1', '2', '4'], 'studio_date': TUE})
+    with db_module.cursor() as sql:
+        lone = sql.execute("select id from requests where student_number = '500111111'"
+                           "   and competency_id = 4").fetchone()[0]
+    student.post('/queue/cancel/%d' % lone)
+    student.post('/queue/join', data={'competency_ids': ['3'], 'studio_date': TUE})
+    assert booked_courses() == {'CPS109': 2}    # the third CPS109 was refused
