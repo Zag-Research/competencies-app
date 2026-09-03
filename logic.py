@@ -15,13 +15,22 @@ STATE_LABELS = {
     'cooling_off': 'Available to retry',
 }
 
+# What staff press, and what the undo banner calls it afterwards. Dave asked for
+# "Deferred" on Sept 2: the outcome is a two day wait before retrying, not a failure,
+# and "Not passed" made it sound like one (#126). Students already saw the kinder
+# "Available to retry" in STATE_LABELS above; this is the half they never see.
+#
+# One constant rather than the four string literals it replaces, because those had
+# already drifted apart once between the marking page and the queue.
+DEFER_LABEL = 'Deferred'
+
 
 def achievement_state(competency_id, states):
     # states maps competency_id -> recorded status. No row means 'unassessed'.
     return states.get(competency_id, 'unassessed')
 
 
-# Retry rule (decided June 15): after a "Not passed", a competency unlocks two
+# Retry rule (decided June 15): after a deferral, a competency unlocks two
 # CALENDAR days later at 8 AM Toronto time (Tue fail -> Thu 8 AM). If that lands on
 # a non-studio day it rolls forward to the next studio day (#25): a Friday fail would
 # otherwise read "retry Sunday 8 AM", but the soonest they could actually retry is the

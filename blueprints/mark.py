@@ -17,7 +17,7 @@ SAVE_STATES = {'unassessed', 'achieved', 'cooling_off'}
 MARK_BUTTONS = [
     ('unassessed', 'Not assessed'),
     ('achieved', 'Achieved'),
-    ('cooling_off', 'Not passed'),
+    ('cooling_off', logic.DEFER_LABEL),
 ]
 
 

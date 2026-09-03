@@ -206,7 +206,7 @@ def queue_cancel(request_id):
 
 
 # A queue request can be marked with the same two recorded outcomes as the mark
-# page: 'achieved', or 'cooling_off' (shown as "Not passed").
+# page: 'achieved', or 'cooling_off' (shown to staff as "Deferred").
 QUEUE_MARK_STATES = {'achieved', 'cooling_off'}
 
 
