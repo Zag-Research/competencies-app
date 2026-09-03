@@ -166,6 +166,12 @@ def view_student(student_number=None):
             span(str(done_pct) + '%').classes('pace-value'),
         ).classes('pace-row')
         pace += div(logic.pace_note(done_pct, term_pct, elapsed)).classes('pace-note')
+        # Where the two numbers come from (#128). Without it "behind" is a word with
+        # nothing behind it, and a student cannot tell whether it means behind the
+        # class, behind a target, or behind schedule.
+        working = logic.pace_explanation(achieved, len(shown), elapsed, sessions)
+        if working:
+            pace += div(working).classes('pace-working')
         p += pace
         # Worth reading (#51). Sits directly under the pace bars, on purpose: the note
         # above may have just told them they are behind, and this is the nearest thing
@@ -308,8 +314,9 @@ def links():
         p += row
         if why:
             p += div(why).classes('link-why')
-    # The list that makes the click tracking worth having: Dave wanted it "per student
-    # so we can encourage students to stay engaged", and this is who to encourage.
+    # The list that makes the click tracking worth having. Dave asked for clicks
+    # tracked per student so that students who are drifting can be encouraged, and
+    # this is the list of who to encourage.
     if rows:
         p += h2('Has not opened anything')
         if not unread:

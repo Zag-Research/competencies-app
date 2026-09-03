@@ -608,3 +608,11 @@ ul.competency-scope li {
     font-size: 0.8rem;
     color: #1a6b3c;
 }
+
+/* The arithmetic under the pace bar (#128). Subordinate to the note above it: that
+   line is the message, this is the working shown underneath. */
+.pace-working {
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+    color: #5f6571;
+}

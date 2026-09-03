@@ -383,7 +383,8 @@ def requests_used_for_studio(sql, student_number, studio_date):
     # button is what lets them plan a week ahead without exhausting a single day's
     # allowance. Takes an open cursor so it can run inside a caller's transaction.
     # bumped_by is null: a bumped competency (#19) carried back into a session does
-    # not count against the student's cap, per Dave's "no penalty" rule.
+    # not count against the student's cap. Dave was clear it should cost the student
+    # nothing, since they did not choose to be bumped.
     row = sql.execute(
         """select count(*) from requests
            where student_number = ? and studio_date = ? and bumped_by is null""",

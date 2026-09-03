@@ -158,3 +158,39 @@ def test_todays_session_does_not_count_here_either():
     # Sept 8 is a Tuesday, which CPS109 meets. Sitting in it, none have finished.
     assert logic.sessions_for(['CPS109'], date(2026, 9, 8))[0] == 0
     assert logic.sessions_for(['CPS109'], date(2026, 9, 9))[0] == 1
+
+
+# --- saying what "behind" is measured against (#128) ------------------------
+
+def test_the_working_is_shown_in_counts():
+    """Daniel asked for this on Sept 2: the bar says behind without saying behind what.
+
+    Counts rather than percentages, because "11 of 40" is checkable against the list
+    underneath, and repeating 28% would explain the number with itself.
+    """
+    assert logic.pace_explanation(11, 40, 12, 36) == (
+        'You have passed 11 of your 40 competencies. '
+        'The studio has run 12 of its 36 sessions.')
+
+
+def test_nothing_is_explained_before_the_studio_starts():
+    """pace_note already says the studio has not started. "0 of 36 sessions" under it
+    adds only discouragement."""
+    assert logic.pace_explanation(0, 40, 0, 36) is None
+
+
+def test_the_working_appears_on_the_students_page(db, monkeypatch):
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 6))
+    body = signed_in_as('500111111', 'student').get(
+        '/view/500111111').get_data(as_text=True)
+    assert 'pace-working' in body
+    assert 'The studio has run' in body
+
+
+def test_it_narrows_with_the_course_filter(db, monkeypatch):
+    """The bar is filtered by course, so the working underneath has to describe the
+    same list or it explains a different number from the one on screen."""
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 6))
+    body = signed_in_as('500111111', 'student').get(
+        '/view/500111111?course=CPS109').get_data(as_text=True)
+    assert 'of your 2 competencies' in body      # the fixture has two in CPS109
