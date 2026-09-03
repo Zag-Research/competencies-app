@@ -258,6 +258,27 @@ def pace_note(done_pct, term_pct, elapsed):
     return 'You are keeping pace with the studio.'
 
 
+def pace_explanation(achieved, total, elapsed, sessions):
+    """Where the two numbers on the bar come from, in counts rather than percentages.
+
+    Daniel asked for this on Sept 2: the bar says a student is behind without saying
+    what behind is measured against, so the word has no definition attached. Dave's
+    version of the arithmetic is the student's percentage over the term's percentage.
+
+    Counts rather than repeating the percentages, because "11 of 40" and "12 of 36" are
+    checkable against the list underneath, and 28% against 33% is the thing being
+    explained rather than an explanation of it.
+
+    Nothing before the first session: pace_note already says the studio has not started,
+    and "0 of 36 sessions" adds only discouragement.
+    """
+    if not elapsed:
+        return None
+    return ('You have passed %d of your %d competencies. '
+            'The studio has run %d of its %d sessions.'
+            % (achieved, total, elapsed, sessions))
+
+
 # Lab machines (#46). Only one action is restricted to being physically in the
 # studio: a student entering their seat number. Dave settled the scope on that issue:
 # "anybody can open it anywhere and has CAS authentication ... Seat number only is an

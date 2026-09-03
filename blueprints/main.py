@@ -166,6 +166,12 @@ def view_student(student_number=None):
             span(str(done_pct) + '%').classes('pace-value'),
         ).classes('pace-row')
         pace += div(logic.pace_note(done_pct, term_pct, elapsed)).classes('pace-note')
+        # Where the two numbers come from (#128). Without it "behind" is a word with
+        # nothing behind it, and a student cannot tell whether it means behind the
+        # class, behind a target, or behind schedule.
+        working = logic.pace_explanation(achieved, len(shown), elapsed, sessions)
+        if working:
+            pace += div(working).classes('pace-working')
         p += pace
         # Worth reading (#51). Sits directly under the pace bars, on purpose: the note
         # above may have just told them they are behind, and this is the nearest thing
