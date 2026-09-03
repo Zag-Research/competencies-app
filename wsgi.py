@@ -9,4 +9,12 @@ not use this file at all: run `flask --app app run --debug` instead. Set APP_ENV
 SECRET_KEY, and (if the database is not beside the code) DB_PATH in the server
 environment before this imports. See DEPLOYMENT.md.
 """
+import sys
+
+path = '/home/dmason/studio'
+
+if path not in sys.path:
+    sys.path.append(path)
+    #print(sys.path,file=sys.stderr)
+
 from app import app as application
