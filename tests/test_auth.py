@@ -307,3 +307,28 @@ def test_the_identity_block_is_not_a_sentence(db):
     assert 'whoami-avatar' in body and '>D<' in body     # the initial
     assert 'whoami-name' in body and 'dmason' in body
     assert 'whoami-role' in body
+
+
+def test_a_student_sees_their_name_not_their_number(db):
+    """Students sign in with their student number, so the header showed them a nine
+    digit string and an avatar reading "5", the first character of it (#133)."""
+    client = client_as('500111111', 'student')
+    body = client.get('/view/500111111').get_data(as_text=True)
+    assert 'whoami-name">Alice Chen<' in body
+    assert 'whoami-avatar">A<' in body
+    assert 'whoami-name">500111111<' not in body
+
+
+def test_staff_keep_their_username(db):
+    """Their CAS username is the thing that matters for them: it is what goes in the
+    admins setting, so seeing it confirms which account they are on."""
+    body = client_as('dmason', 'staff').get('/queue').get_data(as_text=True)
+    assert 'whoami-name">dmason<' in body
+    assert 'whoami-avatar">D<' in body
+
+
+def test_a_student_we_do_not_have_falls_back_to_the_number(db):
+    """Somebody signed in before the roster import reaches them. Better a number than
+    a crash or a blank header."""
+    body = client_as('500999999', 'student').get('/').get_data(as_text=True)
+    assert '500999999' in body
