@@ -194,3 +194,62 @@ def test_it_narrows_with_the_course_filter(db, monkeypatch):
     body = signed_in_as('500111111', 'student').get(
         '/view/500111111?course=CPS109').get_data(as_text=True)
     assert 'of your 2 competencies' in body      # the fixture has two in CPS109
+
+
+# --- the colour ramp (#124) -------------------------------------------------
+
+def test_the_ramp_runs_red_to_green_and_then_blue():
+    """Dave's proposal on Sept 2, so an evaluator spots who needs attention without
+    reading a number."""
+    assert logic.pace_colour(0, 33) == '#c63a2d'          # nothing done, red
+    assert logic.pace_colour(33, 33) == '#217a46'         # keeping pace, green
+    assert logic.pace_colour(50, 33) == '#1a5fb4'         # ahead, blue
+
+
+def test_keeping_pace_exactly_is_green_not_blue():
+    """Blue is for genuinely ahead. A student who is exactly on track has not done
+    anything extra and should not be coloured as though they had."""
+    assert logic.pace_colour(33, 33) == '#217a46'
+    assert logic.pace_colour(34, 33) == '#1a5fb4'
+
+
+def test_the_colour_is_about_expected_progress_not_raw_percentage():
+    """The whole point. 10% in week two is fine; 10% in week ten is not, and a ramp on
+    the raw number would paint them the same."""
+    early = logic.pace_colour(10, 10)      # ten percent done, ten percent through
+    late = logic.pace_colour(10, 60)       # ten percent done, sixty percent through
+    assert early != late
+    assert early == '#217a46'              # on track, green
+
+    # A long way behind, so somewhere in the red end of the ramp rather than at the
+    # exact endpoint: 17% of expected is not 0% and should not look identical to it.
+    red, green, _blue = (int(late[i:i + 2], 16) for i in (1, 3, 5))
+    assert red > green * 2
+
+
+def test_the_ramp_is_gradual_rather_than_three_states():
+    """A student at 49% of expected and one at 51% are not meaningfully different and
+    should not look it."""
+    shades = {logic.pace_colour(p, 100) for p in (20, 40, 60, 80)}
+    assert len(shades) == 4
+
+
+def test_there_is_no_colour_before_the_studio_starts():
+    """No sessions have run, so there is no expectation to be behind. The page falls
+    back to the stylesheet rather than painting somebody red on day one."""
+    assert logic.pace_ratio(0, 0) is None
+    assert logic.pace_colour(0, 0) is None
+
+
+def test_the_bar_carries_the_colour(db, monkeypatch):
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 10, 6))
+    body = signed_in_as('500111111', 'student').get(
+        '/view/500111111').get_data(as_text=True)
+    assert 'background: #' in body
+
+
+def test_the_bar_carries_no_colour_before_term(db, monkeypatch):
+    monkeypatch.setattr(logic, 'today_toronto', lambda: date(2026, 9, 1))
+    body = signed_in_as('500111111', 'student').get(
+        '/view/500111111').get_data(as_text=True)
+    assert 'background: #' not in body

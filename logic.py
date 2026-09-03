@@ -258,6 +258,59 @@ def pace_note(done_pct, term_pct, elapsed):
     return 'You are keeping pace with the studio.'
 
 
+# The pace bar's colour ramp (#124). Dave's proposal on Sept 2: red at nothing, green
+# at keeping up, blue for ahead, so an evaluator spots who needs attention without
+# reading a number. He noted orange reads worse than yellow in the middle, so the ramp
+# passes through yellow rather than sitting in orange.
+#
+# Keyed on progress against EXPECTED progress, not against the whole course. 10% in
+# week two is fine and 10% in week ten is not, and a ramp on the raw percentage would
+# paint both of them the same red.
+PACE_COLOURS = [
+    (0.0, (198, 58, 45)),      # red      nothing done against what was expected
+    (0.5, (214, 158, 33)),     # yellow   halfway to keeping up
+    (1.0, (33, 122, 70)),      # green    keeping pace
+]
+PACE_AHEAD_COLOUR = (26, 95, 180)   # blue, past 100% of expected
+
+
+def pace_ratio(done_pct, term_pct):
+    """How far along they are against how far along they should be (#124).
+
+    None before the studio has run a session: there is no expectation yet, so there is
+    nothing to be behind. Every caller has to decide what to show in that case rather
+    than being handed a misleading 0.
+    """
+    if not term_pct:
+        return None
+    return done_pct / term_pct
+
+
+def pace_colour(done_pct, term_pct):
+    """A CSS colour for the bar, or None before the studio starts.
+
+    Linear between the stops above, so the bar drifts rather than jumping between three
+    states: a student at 49% of expected and one at 51% are not meaningfully different
+    and should not look it.
+    """
+    ratio = pace_ratio(done_pct, term_pct)
+    if ratio is None:
+        return None
+    # Strictly greater: keeping pace exactly is green, and blue is for genuinely ahead.
+    if ratio > 1.0:
+        return '#%02x%02x%02x' % PACE_AHEAD_COLOUR
+    for i in range(len(PACE_COLOURS) - 1):
+        low, low_rgb = PACE_COLOURS[i]
+        high, high_rgb = PACE_COLOURS[i + 1]
+        if low <= ratio <= high:
+            span = high - low
+            weight = (ratio - low) / span if span else 0
+            rgb = tuple(round(a + (b - a) * weight)
+                        for a, b in zip(low_rgb, high_rgb))
+            return '#%02x%02x%02x' % rgb
+    return '#%02x%02x%02x' % PACE_COLOURS[0][1]
+
+
 def pace_explanation(achieved, total, elapsed, sessions):
     """Where the two numbers on the bar come from, in counts rather than percentages.
 

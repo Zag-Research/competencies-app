@@ -154,7 +154,14 @@ def view_student(student_number=None):
         # its own: the point is only to make the student's own number mean something,
         # since 30% says nothing until you know whether the term is 20% or 60% through.
         fill = div().classes('pace-fill')
-        fill.addAttributes(style='width: ' + str(done_pct) + '%')
+        # Colour carries the same meaning as the note underneath, so somebody scanning
+        # a screen sees it without reading (#124). Keyed on progress against expected
+        # progress, so 10% is fine in week two and not in week ten.
+        colour = logic.pace_colour(done_pct, term_pct)
+        style = 'width: ' + str(done_pct) + '%'
+        if colour:
+            style += '; background: ' + colour
+        fill.addAttributes(style=style)
         track = div(fill).classes('pace-track')
         if elapsed:
             marker = div().classes('pace-marker')
