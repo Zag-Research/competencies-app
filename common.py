@@ -123,9 +123,14 @@ def page_header():
         # A round initial, the name, then the role as a small pill. It was one run of
         # text reading "Signed in as dmason (staff)", which is four words of scaffolding
         # around two pieces of information (#121).
+        # Students sign in with their student number, so show their name instead: a
+        # nine digit string tells them nothing they did not already know, and the
+        # avatar read "5" off the front of it (#133). Staff usernames stay as they are.
+        shown = db.student_name(user) if role == 'student' else None
+        shown = shown or user
         who = div().classes('whoami')
-        who += span(user[0].upper()).classes('whoami-avatar')
-        who += span(user).classes('whoami-name')
+        who += span(shown[0].upper()).classes('whoami-avatar')
+        who += span(shown).classes('whoami-name')
         who += span(role).classes('whoami-role')
         header += who
         # Development only. Under CAS there is nothing to switch to: identity comes from

@@ -145,6 +145,23 @@ def studio_lookahead():
     return int(get_setting('studio_lookahead', DEFAULT_STUDIO_LOOKAHEAD))
 
 
+def student_name(student_number):
+    """"Alice Chen" for a student number, or None if we do not have them (#133).
+
+    For the page header. Students sign in with their number, so the header showed them
+    a nine digit string and an avatar reading "5", which is the first character of it.
+    Their own name is friendlier and makes the initial mean something.
+
+    Opens its own cursor because page_header runs outside any request's transaction.
+    """
+    with cursor() as sql:
+        row = sql.execute(
+            'select first_name, last_name from students where student_number = ?',
+            (student_number,)
+        ).fetchone()
+    return (row[0] + ' ' + row[1]) if row else None
+
+
 def lookup_role(username):
     # Interim role lookup: 'staff' if listed in the 'admins' setting, else
     # 'student' if it matches a student_number, else None (unrecognized).
